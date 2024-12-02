@@ -36,12 +36,14 @@ class _SettingsPageState extends State<SettingsPage> {
   double _uploadProgress = 0.0;
   String _uploadStatus = "";
 
+  String? _selectedSubcategory;
   String? _selectedAnnouncement;
   List<String> _announcementOptions = ["Announcement 1", "Announcement 2", "Announcement 3"];
+  List<String> _prowareSubcategories = ["NSTP", "PE", "Proware"];
 
   String? _selectedItemCategory;
   String? _selectedCourseLabel;
-  List<String> _categories = ["senior_high_items", "college_items", "Merch & Accessories"];
+  List<String> _categories = ["senior_high_items", "college_items", "Merch & Accessories", "Proware & PE"];
   List<String> _courseLabels = ["BACOMM", "BSA & BSBA", "HRM & Culinary", "IT&CPE", "Tourism"];
 
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
@@ -173,13 +175,17 @@ class _SettingsPageState extends State<SettingsPage> {
 
       String storagePath;
       if (forAnnouncement) {
-        storagePath = 'admin_images/Announcements/ZmjXRodEmi3LOaYA10tH/${DateTime.now().millisecondsSinceEpoch}.png';
+        // Store announcements directly in the root directory
+        storagePath = 'Announcements/${DateTime.now().millisecondsSinceEpoch}.png';
       } else if (_selectedItemCategory == "Merch & Accessories") {
+        // Store merch images directly in the root directory
         storagePath = 'merch_images/${documentId}_${DateTime.now().millisecondsSinceEpoch}.png';
       } else if (_selectedItemCategory == "senior_high_items") {
-        storagePath = 'images/${documentId}_${DateTime.now().millisecondsSinceEpoch}.png';
+        storagePath = 'senior_high_items/${documentId}_${DateTime.now().millisecondsSinceEpoch}.png';
       } else if (_selectedItemCategory == "college_items" && _selectedCourseLabel != null) {
-        storagePath = 'items/${_selectedCourseLabel}/${DateTime.now().millisecondsSinceEpoch}.png';
+        storagePath = 'college_items/${_selectedCourseLabel}/${documentId}_${DateTime.now().millisecondsSinceEpoch}.png';
+      } else if (_selectedItemCategory == "Proware & PE" && _selectedSubcategory != null) {
+        storagePath = 'proware_and_pe/${_selectedSubcategory}/${documentId}_${DateTime.now().millisecondsSinceEpoch}.png';
       } else {
         throw 'Invalid storage path configuration';
       }
@@ -205,7 +211,6 @@ class _SettingsPageState extends State<SettingsPage> {
           await _updateAnnouncementImageUrl(downloadUrl);
         }
 
-        // Refresh the page after successful upload
         _refreshPage();
 
         return downloadUrl;
@@ -257,8 +262,11 @@ class _SettingsPageState extends State<SettingsPage> {
         });
 
       } else if (_selectedItemCategory == "senior_high_items") {
-        documentRef = firestore.collection("Inventory_stock")
-            .doc("senior_high_items").collection("Items").doc(label);
+        documentRef = firestore
+            .collection("Inventory_stock")
+            .doc("senior_high_items")
+            .collection("Items")
+            .doc(label);
 
         Map<String, dynamic> itemData = {
           "label": label,
@@ -276,8 +284,11 @@ class _SettingsPageState extends State<SettingsPage> {
         await documentRef.set(itemData, SetOptions(merge: true));
 
       } else if (_selectedItemCategory == "college_items" && _selectedCourseLabel != null) {
-        documentRef = firestore.collection("Inventory_stock")
-            .doc("college_items").collection(_selectedCourseLabel!).doc(label);
+        documentRef = firestore
+            .collection("Inventory_stock")
+            .doc("college_items")
+            .collection(_selectedCourseLabel!)
+            .doc(label);
 
         Map<String, dynamic> itemData = {
           "label": label,
@@ -294,6 +305,28 @@ class _SettingsPageState extends State<SettingsPage> {
 
         await documentRef.set(itemData, SetOptions(merge: true));
 
+      } else if (_selectedItemCategory == "Proware & PE" && _selectedSubcategory != null) {
+        documentRef = firestore
+            .collection("Inventory_stock")
+            .doc("Proware & PE")
+            .collection(_selectedSubcategory!)
+            .doc(label);
+
+        Map<String, dynamic> itemData = {
+          "subcategory": _selectedSubcategory,
+          "label": label,
+          "price": price,
+          "sizes": {
+            size: {
+              'quantity': quantity,
+              'price': price,
+            }
+          },
+          "imagePath": imageUrl,
+          "category": _selectedItemCategory,
+        };
+
+        await documentRef.set(itemData, SetOptions(merge: true));
       } else {
         throw 'Invalid category or course label';
       }
@@ -302,7 +335,6 @@ class _SettingsPageState extends State<SettingsPage> {
         SnackBar(content: Text("Item added or updated successfully!")),
       );
 
-      // Refresh the page after successful add/update
       _refreshPage();
 
     } catch (e) {
@@ -355,7 +387,6 @@ class _SettingsPageState extends State<SettingsPage> {
             SnackBar(content: Text("Item '$label' deleted successfully from Senior High Items!")),
           );
 
-          // Refresh the page after successful deletion
           _refreshPage();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -379,7 +410,6 @@ class _SettingsPageState extends State<SettingsPage> {
             SnackBar(content: Text("Item '$label' deleted successfully from College Items!")),
           );
 
-          // Refresh the page after successful deletion
           _refreshPage();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -387,6 +417,28 @@ class _SettingsPageState extends State<SettingsPage> {
           );
         }
 
+      } else if (_selectedItemCategory == "Proware & PE" && _selectedCourseLabel != null) {
+        QuerySnapshot querySnapshot = await firestore
+            .collection("Inventory_stock")
+            .doc("Proware & PE")
+            .collection(_selectedCourseLabel!)
+            .where("label", isEqualTo: label)
+            .get();
+
+        if (querySnapshot.docs.isNotEmpty) {
+          for (QueryDocumentSnapshot doc in querySnapshot.docs) {
+            await doc.reference.delete();
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Item '$label' deleted successfully from Proware & PE!")),
+          );
+
+          _refreshPage();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Item '$label' not found in Proware & PE!")),
+          );
+        }
       } else {
         throw 'Invalid category or course label';
       }
@@ -435,7 +487,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                           onPressed: () {
                             setState(() {
-                              _isPasswordVisible = !_isPasswordVisible; // Toggle visibility
+                              _isPasswordVisible = !_isPasswordVisible;
                             });
                           },
                         ),
@@ -515,6 +567,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       validator: (value) => value == null || value.isEmpty ? 'Please enter a quantity' : null,
                     ),
                     SizedBox(height: 20),
+
                     DropdownButtonFormField<String>(
                       decoration: InputDecoration(labelText: 'Select Category', border: OutlineInputBorder()),
                       value: _selectedItemCategory,
@@ -524,11 +577,32 @@ class _SettingsPageState extends State<SettingsPage> {
                       onChanged: (value) {
                         setState(() {
                           _selectedItemCategory = value;
-                          if (value != "college_items") _selectedCourseLabel = null;
+
+                          if (value != "college_items") {
+                            _selectedCourseLabel = null;
+                          }
+                          if (value != "Proware & PE") {
+                            _selectedSubcategory = null;
+                          }
                         });
                       },
                     ),
                     SizedBox(height: 20),
+
+                    if (_selectedItemCategory == "Proware & PE")
+                      DropdownButtonFormField<String>(
+                        decoration: InputDecoration(labelText: 'Select Subcategory', border: OutlineInputBorder()),
+                        value: _selectedSubcategory,
+                        items: _prowareSubcategories.map((option) {
+                          return DropdownMenuItem(value: option, child: Text(option));
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedSubcategory = value;
+                          });
+                        },
+                      ),
+
                     if (_selectedItemCategory == "college_items")
                       DropdownButtonFormField<String>(
                         decoration: InputDecoration(labelText: 'Select Course Label', border: OutlineInputBorder()),
@@ -542,21 +616,23 @@ class _SettingsPageState extends State<SettingsPage> {
                           });
                         },
                       ),
-                    if (_selectedItemCategory == "college_items") SizedBox(height: 20),
+                    SizedBox(height: 20),
+
                     ElevatedButton.icon(
                       icon: Icon(Icons.attach_file),
                       label: Text('Select Image for Item'),
                       onPressed: () => _pickImage(forAnnouncement: false),
                     ),
                     if (_webItemImage != null) Image.memory(_webItemImage!, height: 150),
-                    // Preview of the selected item image
                     SizedBox(height: 10),
+
                     ElevatedButton.icon(
                       icon: Icon(Icons.cloud_upload),
                       label: _isItemImageUploading ? Text('Uploading...') : Text('Add or Update Item'),
                       onPressed: _isItemImageUploading ? null : addOrUpdateItem,
                     ),
                     SizedBox(height: 10),
+
                     ElevatedButton.icon(
                       icon: Icon(Icons.delete),
                       label: Text('Delete Item'),

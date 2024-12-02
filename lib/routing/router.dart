@@ -8,6 +8,7 @@ import 'package:unistock/pages/pre_order/pre_order.dart';
 import 'package:unistock/pages/sales_history/sales_history.dart';
 import 'package:unistock/pages/sales_statistics/sales_statistics.dart';
 import 'package:unistock/pages/release/ReleasePage.dart';
+import 'package:unistock/pages/walk-in(preorder)/walk-in(preorder).dart';
 import 'package:unistock/pages/walk-in/walk-in.dart';
 import 'package:unistock/pages/NotificationPage.dart';
 import 'package:unistock/routing/routes.dart';
@@ -28,6 +29,8 @@ Route<dynamic> generateRoute(RouteSettings settings) {
       return _getPageRoute(SalesStatisticsPage());
     case WalkinPageRoute:
       return _getPageRoute(WalkinPage());
+    case WalkinPagePreOrderRoute:
+      return _getPageRoute(WalkinPagePreOrder());
     case SettingsPageRoute:
       return _getPageRoute(SettingsPage());
     case ReleasePageRoute:

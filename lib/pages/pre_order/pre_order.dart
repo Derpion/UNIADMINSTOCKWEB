@@ -116,102 +116,6 @@ class _PreOrderPageState extends State<PreOrderPage> {
     }
   }
 
-  Future<void> _approvePreOrder(Map<String, dynamic> preOrder) async {
-    try {
-      String userId = preOrder['userId'] ?? '';
-      String orderId = preOrder['orderId'] ?? '';
-      String userName = preOrder['userName'] ?? 'Unknown User';
-      String studentId = preOrder['studentId'] ?? 'Unknown ID';
-
-      print('Approving pre-order for userId: $userId, orderId: $orderId');
-      print('Pre-order details: $preOrder');
-
-      if (userId.isEmpty || orderId.isEmpty) {
-        throw Exception('Invalid pre-order data: userId or orderId is missing.');
-      }
-
-      // Fetch the user's profile to get the contact number and name
-      DocumentSnapshot userDoc = await _firestore.collection('users').doc(userId).get();
-      if (!userDoc.exists || userDoc['contactNumber'] == null) {
-        throw Exception('User profile not found or contact number is missing.');
-      }
-
-      // Get the contact number and other user details from the user's document
-      String contactNumber = userDoc['contactNumber'];
-      String studentName = userDoc['name'] ?? 'Unknown Name';  // Assuming `name` field exists
-      String studentNumber = userDoc['studentId'] ?? 'Unknown ID';
-      print('Fetched contact number: $contactNumber');
-
-      // Fetch the order document
-      DocumentSnapshot orderDoc = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('preorders')
-          .doc(orderId)
-          .get();
-
-      if (!orderDoc.exists) {
-        throw Exception('Order not found');
-      }
-
-      Map<String, dynamic> orderData = orderDoc.data() as Map<String, dynamic>;
-      orderData['status'] = 'approved';
-
-      double totalOrderPrice = orderData['totalOrderPrice'] ?? 0.0;  // Using totalOrderPrice from the document if available
-      List<dynamic> orderItems = preOrder['items'] ?? [];
-
-      if (orderItems.isEmpty) {
-        throw Exception('No items found in the pre-order');
-      }
-
-      List<Map<String, dynamic>> cartItems = [];
-      for (var item in orderItems) {
-        String label = (item['label'] ?? 'No Label').trim();
-        int quantity = item['quantity'] ?? 0;
-
-        if (label.isEmpty || quantity <= 0) {
-          throw Exception('Invalid item data: missing label or quantity.');
-        }
-
-        cartItems.add({
-          'label': label,
-          'quantity': quantity,
-          'pricePerPiece': item['pricePerPiece'] ?? 0.0,  // Assuming pricePerPiece is part of each item
-        });
-      }
-
-      // Save to approved_preorders collection and delete from preorders collection
-      await _firestore.collection('approved_preorders').doc(orderId).set({
-        'userId': userId,
-        ...orderData,
-      });
-
-      await _firestore.collection('users').doc(userId).collection('preorders').doc(orderId).delete();
-
-      // Send SMS and Notification
-      await _sendSMSToUser(contactNumber, studentName, studentNumber, totalOrderPrice, cartItems);
-      await _sendNotificationToUser(userId, userName, preOrder);
-
-      await _fetchAllPendingPreOrders();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Pre-order for ${preOrder['items'].map((e) => e['label']).join(", ")} approved successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-
-    } catch (e) {
-      print('Error approving pre-order: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to approve pre-order: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
   Future<void> _fetchAllPendingPreOrders() async {
     List<Map<String, dynamic>> pendingPreOrders = [];
     setState(() {
@@ -246,14 +150,17 @@ class _PreOrderPageState extends State<PreOrderPage> {
           'studentId': studentId,
           'label': label,
           'category': items.length > 1 ? 'Multiple' : items[0]['category'],
-          'courseLabel': items.length > 1 ? 'Various' : items[0]['courseLabel'],
+          'courseLabel': items.length > 1 ? 'Various' : (items[0]['courseLabel'] ?? 'Unknown CourseLabel'),
           'itemSize': items.length > 1 ? 'Various' : items[0]['itemSize'],
-          'quantity': items.length > 1 ? items.map((e) => e['quantity'] as int).reduce((a, b) => a + b) : items[0]['quantity'],
+          'quantity': items.length > 1
+              ? items.map((e) => e['quantity'] as int).reduce((a, b) => a + b)
+              : items[0]['quantity'],
           'preOrderDate': preOrderDate,
           'items': items,
           'preOrderTimestamp': preOrderData['preOrderDate'] as Timestamp,
           'orderId': preorderDoc.id,
         });
+
       }
     }
 
@@ -263,6 +170,254 @@ class _PreOrderPageState extends State<PreOrderPage> {
       allPendingPreOrders = pendingPreOrders;
       isLoading = false;
     });
+  }
+
+  Future<void> _approvePreOrder(Map<String, dynamic> preOrder) async {
+    try {
+      print("Approving pre-order...");
+      print("Pre-order details: $preOrder");
+
+      String userId = preOrder['userId'] ?? '';
+      String orderId = preOrder['orderId'] ?? '';
+      String userName = preOrder['userName'] ?? 'Unknown User';
+      String studentId = preOrder['studentId'] ?? 'Unknown ID';
+
+      if (userId.isEmpty || orderId.isEmpty) {
+        throw Exception('Invalid pre-order data: userId or orderId is missing.');
+      }
+
+      DocumentSnapshot userDoc = await _firestore.collection('users').doc(userId).get();
+      if (!userDoc.exists || userDoc['contactNumber'] == null) {
+        throw Exception('User profile not found or contact number is missing.');
+      }
+
+      String contactNumber = userDoc['contactNumber'];
+      String studentName = userDoc['name'] ?? 'Unknown Name';
+      String studentNumber = userDoc['studentId'] ?? 'Unknown ID';
+
+      DocumentSnapshot orderDoc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('preorders')
+          .doc(orderId)
+          .get();
+
+      if (!orderDoc.exists) {
+        throw Exception('Order not found');
+      }
+
+      Map<String, dynamic> orderData = orderDoc.data() as Map<String, dynamic>;
+      orderData['status'] = 'approved';
+
+      double totalOrderPrice = orderData['totalOrderPrice'] ?? 0.0;
+      List<dynamic> orderItems = preOrder['items'] ?? [];
+
+      if (orderItems.isEmpty) {
+        throw Exception('No items found in the pre-order');
+      }
+
+      print("Validating items in the pre-order...");
+      for (var item in orderItems) {
+        String label = (item['label'] ?? 'No Label').trim();
+        String category = item['category'] ?? 'Unknown Category';
+        String subCategoryOrCourseLabel;
+
+        if (category.toLowerCase() == 'proware & pe') {
+          subCategoryOrCourseLabel = item['courseLabel'] ?? item['subcategory'] ?? 'Unknown SubCategory';
+        } else if (category.toLowerCase() == 'college_items') {
+          subCategoryOrCourseLabel = item['courseLabel'] ?? 'Unknown CourseLabel';
+        } else if (category.toLowerCase() == 'merch_and_accessories') {
+          subCategoryOrCourseLabel = 'N/A';
+        } else if (category.toLowerCase() == 'senior_high_items') {
+          subCategoryOrCourseLabel = 'N/A';
+        } else {
+          subCategoryOrCourseLabel = item['courseLabel'] ?? 'Unknown CourseLabel';
+        }
+
+        // Skip validation of SubCategory for merch_and_accessories
+        if (subCategoryOrCourseLabel.toLowerCase().contains('unknown') &&
+            category.toLowerCase() != 'merch_and_accessories') {
+          print("Invalid SubCategory/CourseLabel for $label in category $category.");
+          throw Exception("Invalid SubCategory/CourseLabel for $label in category $category.");
+        }
+
+        String size = item['itemSize'] ?? 'Unknown Size';
+        int quantity = item['quantity'] ?? 0;
+
+        print("Validating item: $label (Category: $category, SubCategory/CourseLabel: $subCategoryOrCourseLabel, Size: $size, Quantity: $quantity)");
+
+        if (!await _validateStockAvailability(category, subCategoryOrCourseLabel, label, size, quantity)) {
+          throw Exception('Insufficient stock for $label size $size.');
+        }
+      }
+
+      print("All items validated. Approving order...");
+
+      List<Map<String, dynamic>> cartItems = [];
+      for (var item in orderItems) {
+        String label = (item['label'] ?? 'No Label').trim();
+        int quantity = item['quantity'] ?? 0;
+
+        if (label.isEmpty || quantity <= 0) {
+          throw Exception('Invalid item data: missing label or quantity.');
+        }
+
+        cartItems.add({
+          'label': label,
+          'quantity': quantity,
+          'pricePerPiece': item['pricePerPiece'] ?? 0.0,
+        });
+      }
+
+      await _firestore.collection('approved_preorders').doc(orderId).set({
+        'userId': userId,
+        ...orderData,
+      });
+
+      await _firestore.collection('users').doc(userId).collection('preorders').doc(orderId).delete();
+
+      print("Sending SMS and notifications...");
+      await _sendSMSToUser(contactNumber, studentName, studentNumber, totalOrderPrice, cartItems);
+      await _sendNotificationToUser(userId, userName, preOrder);
+      await _fetchAllPendingPreOrders();
+
+      print("Pre-order approved successfully.");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Pre-order for ${preOrder['items'].map((e) => e['label']).join(", ")} approved successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      print("Error during pre-order approval: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to approve pre-order: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<bool> _validateStockAvailability(String category, String subCategoryOrCourseLabel, String label, String size, int quantity) async {
+    try {
+      print("Original Category: $category");
+
+      // Normalize category
+      String normalizedCategory = category.replaceAll('_', ' ').toLowerCase();
+      print("Normalized Category: $normalizedCategory");
+
+      Map<String, dynamic>? itemData;
+
+      if (normalizedCategory == 'proware & pe') {
+        // Validate subcategory
+        if (subCategoryOrCourseLabel == "Unknown SubCategory") {
+          print("Invalid SubCategory for Proware & PE: $subCategoryOrCourseLabel.");
+          return false;
+        }
+
+        print("Fetching items in subcategory: $subCategoryOrCourseLabel");
+        // Query the subcategory collection
+        QuerySnapshot snapshot = await _firestore
+            .collection('Inventory_stock')
+            .doc('Proware & PE')
+            .collection(subCategoryOrCourseLabel) // Expected: NSTP, PE, or Proware
+            .get();
+
+        // Iterate over documents to find the matching label
+        for (var doc in snapshot.docs) {
+          Map<String, dynamic> docData = doc.data() as Map<String, dynamic>;
+
+          // Match the label field in the document (case-insensitive comparison)
+          if ((docData['label'] as String).toLowerCase() == label.toLowerCase()) {
+            itemData = docData;
+            break;
+          }
+        }
+
+        if (itemData == null) {
+          print("Item '$label' not found in Proware & PE -> $subCategoryOrCourseLabel.");
+          return false;
+        }
+      }
+
+      else if (normalizedCategory == 'merch and accessories') {
+        // Fetch the Merch & Accessories document
+        DocumentSnapshot doc = await _firestore
+            .collection('Inventory_stock')
+            .doc('Merch & Accessories')
+            .get();
+
+        Map<String, dynamic> merchData = doc.data() as Map<String, dynamic>;
+
+        if (merchData.containsKey(label)) {
+          itemData = merchData[label] as Map<String, dynamic>;
+        } else {
+          print("Label '$label' not found in Merch & Accessories document.");
+          return false;
+        }
+      } else if (normalizedCategory == 'senior high items') {
+        QuerySnapshot snapshot = await _firestore
+            .collection('Inventory_stock')
+            .doc('senior_high_items')
+            .collection('Items')
+            .get();
+
+        for (var doc in snapshot.docs) {
+          if (doc.id == label) {
+            itemData = doc.data() as Map<String, dynamic>;
+            break;
+          }
+        }
+      } else if (normalizedCategory == 'college items') {
+        QuerySnapshot snapshot = await _firestore
+            .collection('Inventory_stock')
+            .doc('college_items')
+            .collection(subCategoryOrCourseLabel)
+            .get();
+
+        for (var doc in snapshot.docs) {
+          Map<String, dynamic> docData = doc.data() as Map<String, dynamic>;
+
+          if ((docData['label'] as String).toLowerCase() == label.toLowerCase()) {
+            itemData = docData;
+            break;
+          }
+        }
+
+        if (itemData == null) {
+          print("Item '$label' not found in college_items -> $subCategoryOrCourseLabel.");
+          return false;
+        }
+      } else {
+        print("Unknown category: $category.");
+        return false; // Invalid category
+      }
+
+      if (itemData != null) {
+        if (itemData.containsKey('sizes')) {
+          Map<String, dynamic> sizes = itemData['sizes'] as Map<String, dynamic>;
+          if (sizes.containsKey(size)) {
+            Map<String, dynamic> sizeData = sizes[size] as Map<String, dynamic>;
+            int currentStock = sizeData['quantity'] ?? 0;
+            print("Current Stock for $label (Size: $size): $currentStock");
+            return currentStock >= quantity;
+          } else {
+            print("Size $size not found for $label in $category -> $subCategoryOrCourseLabel.");
+            return false;
+          }
+        } else {
+          print("'sizes' field missing in Firestore document for $label.");
+          return false;
+        }
+      } else {
+        print("Item $label not found in $category -> $subCategoryOrCourseLabel.");
+        return false; // Item not found
+      }
+    } catch (e) {
+      print("Error during stock validation: $e");
+      throw Exception('Failed to validate stock availability: $e');
+    }
   }
 
   Future<void> _rejectPreOrder(Map<String, dynamic> preOrder) async {
@@ -293,7 +448,6 @@ class _PreOrderPageState extends State<PreOrderPage> {
       );
     }
   }
-
 
   @override
   Widget build(BuildContext context) {

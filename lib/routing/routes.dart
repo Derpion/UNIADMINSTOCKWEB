@@ -4,6 +4,7 @@ const ReservationListPageRoute = "Reservation List";
 const SalesHistoryPageRoute = "Sales Report";
 const SalesStatisticsPageRoute = "Sales Statistics";
 const WalkinPageRoute = "Walk-In";
+const WalkinPagePreOrderRoute = "Walk-In (PreOrder)";
 const AuthenticationPageRoute = "Authentication";
 const SettingsPageRoute = "Settings";
 const PreOrderPageRoute = "Pre-Order";
@@ -18,6 +19,7 @@ List sideMenuItems = [
   SalesHistoryPageRoute,
   SalesStatisticsPageRoute,
   WalkinPageRoute,
+  WalkinPagePreOrderRoute,
   ReleasePageRoute,
   AuthenticationPageRoute
 ];

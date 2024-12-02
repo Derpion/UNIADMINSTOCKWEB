@@ -6,12 +6,12 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-class WalkinPage extends StatefulWidget {
+class WalkinPagePreOrder extends StatefulWidget {
   @override
-  _MainWalkInPageState createState() => _MainWalkInPageState();
+  _MainWalkInPreOrderPageState createState() => _MainWalkInPreOrderPageState();
 }
 
-class _MainWalkInPageState extends State<WalkinPage> {
+class _MainWalkInPreOrderPageState extends State<WalkinPagePreOrder> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _studentNumberController = TextEditingController();
@@ -728,22 +728,32 @@ class _MainWalkInPageState extends State<WalkinPage> {
     }
 
     print('Starting order submission...');
-    String studentName = _nameController.text;
-    String studentNumber = _studentNumberController.text;
-    String contactNumber = _contactNumberController.text;
+    String studentName = _nameController.text.trim();
+    String studentNumber = _studentNumberController.text.trim();
+    String contactNumber = _contactNumberController.text.trim();
 
     try {
+      QuerySnapshot userSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('name', isEqualTo: studentName)
+          .where('studentId', isEqualTo: studentNumber)
+          .get();
+
+      if (userSnapshot.docs.isEmpty) {
+        throw Exception('User with the provided name and student ID not found.');
+      }
+
+      String userId = userSnapshot.docs.first.id;
+
       List<Map<String, dynamic>> cartItems = [];
-      double totalAmount = 0.0;
 
       for (String item in _selectedQuantities.keys) {
         int quantity = _selectedQuantities[item] ?? 0;
         String? size = _selectedSizes[item];
-        if (quantity > 0 && size != null && size != 'None') {
-          String category;
-          String? subcategory;
-          String? courseLabel;
+        String category = '';
+        String? courseLabel;
 
+        if (quantity > 0 && size != null && size != 'None') {
           if (_selectedCategory == 'Uniform') {
             if (_selectedSchoolLevel == 'Senior High') {
               category = 'senior_high_items';
@@ -752,125 +762,49 @@ class _MainWalkInPageState extends State<WalkinPage> {
               courseLabel = _selectedCourseLabel;
             }
           } else if (_selectedCategory == 'Merch & Accessories') {
-            category = 'Merch & Accessories';
+            category = 'merch_and_accessories';
           } else if (_selectedCategory == 'Proware & PE') {
-            category = 'Proware & PE';
-            subcategory = _selectedSubcategory;
-          } else {
-            continue;
+            category = 'proware_and_pe';
+            courseLabel = _selectedSubcategory;
           }
-
-          double itemPrice = await _getItemPrice(category, item, courseLabel, size, subcategory);
-          double total = itemPrice * quantity;
-
-          totalAmount += total;
 
           cartItems.add({
             'label': item,
             'itemSize': size,
-            'mainCategory': category,
-            'subCategory': subcategory ?? courseLabel ?? 'N/A',
-            'pricePerPiece': itemPrice,
             'quantity': quantity,
+            'category': category,
+            'courseLabel': courseLabel ?? 'N/A',
           });
         }
       }
 
-      print('Cart Items: $cartItems');
-      print('Total Amount: $totalAmount');
-
-      CollectionReference approvedReservationsRef =
-      FirebaseFirestore.instance.collection('approved_reservation');
-      await approvedReservationsRef.add({
-        'approvalDate': FieldValue.serverTimestamp(),
-        'name': studentName,
-        'studentNumber': studentNumber,
-        'contactNumber': contactNumber,
+      Map<String, dynamic> preOrderData = {
         'items': cartItems,
-      });
+        'contactNumber': contactNumber, // Moved here, below the items list
+        'preOrderDate': Timestamp.now(),
+        'status': 'pre-order confirmed',
+        'studentId': studentNumber,
+        'userName': studentName,
+      };
 
-      print('Order stored in Firestore.');
+      // Save pre-order to Firestore under the user's collection
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('preorders')
+          .add(preOrderData);
 
-      await _sendSMSToUser(contactNumber, studentName, studentNumber, totalAmount, cartItems);
+      print('Pre-order stored successfully in Firestore.');
+
+      await _sendSMSToUser(contactNumber, studentName, studentNumber, 0.0, cartItems);
 
       print('SMS sent successfully.');
-      Get.snackbar('Success', 'Order submitted and SMS sent successfully!');
+      Get.snackbar('Success', 'Order submitted and saved successfully!');
       _refreshData();
     } catch (e) {
       print('Error in _submitOrder: $e');
       Get.snackbar('Error', 'Failed to submit the order. Please try again.');
     }
-  }
-
-  Future<double> _getItemPrice(String category, String itemLabel, String? courseLabel, String selectedSize, [String? subcategory,]) async {
-    double price = 0.0;
-
-    print('Fetching price for: $itemLabel, Category: $category, Size: $selectedSize, CourseLabel: $courseLabel, Subcategory: $subcategory');
-
-    if (category == 'senior_high_items') {
-      final itemData = _seniorHighStockQuantities[itemLabel];
-      if (itemData != null) {
-        price = itemData['sizes']?[selectedSize]?['price'] ?? itemData['defaultPrice'] ?? 0.0;
-      }
-      print('Senior High Price: $price');
-    } else if (category == 'college_items' && courseLabel != null) {
-      try {
-        final courseCollection = FirebaseFirestore.instance
-            .collection('Inventory_stock')
-            .doc(category)
-            .collection(courseLabel);
-
-        QuerySnapshot querySnapshot = await courseCollection.where('label', isEqualTo: itemLabel).get();
-
-        if (querySnapshot.docs.isNotEmpty) {
-          final itemData = querySnapshot.docs.first.data() as Map<String, dynamic>;
-          price = itemData['sizes']?[selectedSize]?['price'] ?? itemData['price'] ?? 0.0;
-          print('College Price for $itemLabel (Size: $selectedSize): $price');
-        } else {
-          print('Item not found in college_items for $itemLabel under course $courseLabel');
-        }
-      } catch (e) {
-        print('Error fetching college_items: $e');
-      }
-    } else if (category == 'Merch & Accessories') {
-      final itemData = _merchStockQuantities[itemLabel];
-      if (itemData != null) {
-        price = itemData['sizes']?[selectedSize]?['price'] ?? itemData['defaultPrice'] ?? 0.0;
-      }
-      print('Merch Price: $price');
-    } else if (category == 'Proware & PE' && subcategory != null) {
-      final itemData = _prowareStockQuantities[subcategory]?[itemLabel];
-      if (itemData != null) {
-        price = itemData['sizes']?[selectedSize]?['price'] ?? itemData['defaultPrice'] ?? 0.0;
-      }
-      print('Proware & PE Price: $price');
-    } else {
-      print('Unknown category: $category');
-    }
-
-    if (price == 0.0) {
-      print('Price not found for item: $itemLabel, Size: $selectedSize');
-    }
-
-    return price;
-  }
-
-  String _findDocumentIdForItem(String itemLabel) {
-    Map<String, String> labelToIdMap = {
-      "Blouse with Vest": "SHS_BLOUSE_WITH_VEST",
-      "Polo with Vest": "SHS_POLO_WITH_VEST",
-      "SHS APRON": "SHS_APRON",
-      "SHS NECKTIE": "SHS_NECKTIE",
-      "SHS PANTS": "SHS_PANTS",
-      "SHS PE PANTS": "SHS_PE_PANTS",
-      "SHS PE SHIRT": "SHS_PE_SHIRT",
-      "SHS Skirt": "SHS_SKIRT",
-      "SHS Washday": "SHS_WASHDAY",
-      "STI Checkered Beanie": "STI_CHECKERED_BEANIE",
-      "STI Checkered Pants": "STI_LONG_CHECKERED_PANTS",
-      "STI Chef's Blouse": "STI_WHITE_CHEF_LONG_SLEEVE_BLOUSE"
-    };
-    return labelToIdMap[itemLabel] ?? itemLabel;
   }
 
   void _refreshData() {
