@@ -30,7 +30,7 @@ class _ReservationListPageState extends State<ReservationListPage> {
       case 'Merch & Accessories':
         return 'Merch & Accessories';
       default:
-        return category; // Fallback for unexpected categories
+        return category;
     }
   }
 
@@ -79,7 +79,6 @@ class _ReservationListPageState extends State<ReservationListPage> {
         reservationData['category'] = reservationData['category'] ?? 'Unknown Category';
         reservationData['label'] = reservationData['label'] ?? 'No Label';
 
-        // Dynamically assign courseLabel or subcategory based on the category
         if (reservationData['category'] == 'Proware & PE') {
           reservationData['subcategory'] = reservationData['subcategory'] ?? 'Unknown Subcategory';
         } else {
@@ -116,7 +115,6 @@ class _ReservationListPageState extends State<ReservationListPage> {
           reservationData['quantity'] = quantity;
           reservationData['label'] = reservationData['label'];
 
-          // Dynamically assign courseLabel or subcategory
           if (reservationData['category'] == 'Proware & PE') {
             reservationData['subcategory'] = reservationData['subcategory'] ?? 'Unknown Subcategory';
           } else {
@@ -244,11 +242,9 @@ class _ReservationListPageState extends State<ReservationListPage> {
 
   Future<void> _validateAndProcessStock(String category, String subcategoryOrCourseLabel, String label, String size, int quantity) async {
     try {
-      // Normalize the category for consistent handling
       category = normalizeCategory(category);
 
       if (category == 'Merch & Accessories') {
-        // Handle Merch & Accessories
         DocumentSnapshot merchDoc =
         await _firestore.collection('Inventory_stock').doc('Merch & Accessories').get();
 
@@ -264,7 +260,6 @@ class _ReservationListPageState extends State<ReservationListPage> {
           throw Exception('Item "$label" not found in Merch & Accessories inventory.');
         }
       } else if (category == 'College Items') {
-        // Handle College Items
         CollectionReference itemsRef =
         _firestore.collection('Inventory_stock').doc('college_items').collection(subcategoryOrCourseLabel);
         QuerySnapshot querySnapshot = await itemsRef.where('label', isEqualTo: label).limit(1).get();
@@ -278,7 +273,6 @@ class _ReservationListPageState extends State<ReservationListPage> {
           throw Exception('Item "$label" not found in College Items inventory.');
         }
       } else if (category == 'Senior High Items') {
-        // Handle Senior High Items
         CollectionReference itemsRef =
         _firestore.collection('Inventory_stock').doc('senior_high_items').collection('Items');
         QuerySnapshot querySnapshot = await itemsRef.where('label', isEqualTo: label).limit(1).get();
@@ -292,7 +286,6 @@ class _ReservationListPageState extends State<ReservationListPage> {
           throw Exception('Item "$label" not found in Senior High Items inventory.');
         }
       } else if (category == 'Proware & PE') {
-        // Handle Proware & PE
         CollectionReference itemsRef =
         _firestore.collection('Inventory_stock').doc('Proware & PE').collection(subcategoryOrCourseLabel);
         QuerySnapshot querySnapshot = await itemsRef.where('label', isEqualTo: label).limit(1).get();

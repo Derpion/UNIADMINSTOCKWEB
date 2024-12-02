@@ -46,7 +46,7 @@ class _SalesStatisticsPageState extends State<SalesStatisticsPage> {
       Map<String, double> collegeSales = {};
       Map<String, double> seniorHighSales = {};
       Map<String, double> merchSales = {};
-      Map<String, double> prowareSales = {}; // New for Proware & PE
+      Map<String, double> prowareSales = {};
 
       DateTime now = DateTime.now();
       DateTime startDate;
@@ -92,7 +92,7 @@ class _SalesStatisticsPageState extends State<SalesStatisticsPage> {
               collegeSales[itemLabel] = (collegeSales[itemLabel] ?? 0) + quantity;
             } else if (category == 'Merch & Accessories' || category == 'merch_and_accessories') {
               merchSales[itemLabel] = (merchSales[itemLabel] ?? 0) + quantity;
-            } else if (category == 'Proware & PE' || category == 'proware_and_pe') { // Handle Proware & PE
+            } else if (category == 'Proware & PE' || category == 'proware_and_pe') {
               prowareSales[itemLabel] = (prowareSales[itemLabel] ?? 0) + quantity;
             }
           }
@@ -103,11 +103,10 @@ class _SalesStatisticsPageState extends State<SalesStatisticsPage> {
         _collegeSalesData = collegeSales;
         _seniorHighSalesData = seniorHighSales;
         _merchSalesData = merchSales;
-        _prowareSalesData = prowareSales; // Save the data for Proware & PE
+        _prowareSalesData = prowareSales;
         _isLoading = false;
       });
     } catch (e) {
-      print("Error fetching sales data: $e");
       setState(() {
         _isLoading = false;
       });
@@ -175,7 +174,7 @@ class _SalesStatisticsPageState extends State<SalesStatisticsPage> {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
               SizedBox(height: 20),
-              _buildPieChart(_prowareSalesData), // Proware & PE Pie Chart
+              _buildPieChart(_prowareSalesData),
             ],
           ),
         ),

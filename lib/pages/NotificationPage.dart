@@ -36,7 +36,7 @@ class _AdminNotificationPageState extends State<AdminNotificationPage> {
 
           return ListView.separated(
             itemCount: notifications.length,
-            separatorBuilder: (context, index) => Divider(thickness: 1, color: Colors.grey), // Divider between each item
+            separatorBuilder: (context, index) => Divider(thickness: 1, color: Colors.grey),
             itemBuilder: (context, index) {
               Map<String, dynamic> notificationData = notifications[index].data() as Map<String, dynamic>;
 
@@ -75,9 +75,7 @@ class _AdminNotificationPageState extends State<AdminNotificationPage> {
       await _firestore.collection('admin_notifications').doc(docId).update({
         'status': 'read',
       });
-      print("Notification marked as read.");
     } catch (e) {
-      print("Failed to mark notification as read: $e");
     }
   }
 }

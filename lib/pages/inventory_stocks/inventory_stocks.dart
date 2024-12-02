@@ -190,7 +190,6 @@ class _InventoryPageState extends State<InventoryPage> {
         _collegeStockQuantities = collegeData;
       });
     } catch (e) {
-      print("Error fetching college stock: $e");
     }
   }
 
@@ -281,7 +280,6 @@ class _InventoryPageState extends State<InventoryPage> {
         _prowareStockQuantities = prowareData;
       });
     } catch (e) {
-      print("Error fetching Proware & PE stock: $e");
     }
   }
 
@@ -335,7 +333,6 @@ class _InventoryPageState extends State<InventoryPage> {
             TextButton(
               onPressed: () {
                 if (_selectedSize != null) {
-                  // Pass subcategory only for Proware & PE
                   _addCustomSize(itemKey, itemData, collectionType, subcategory);
                   Navigator.of(context).pop();
                 }
@@ -349,24 +346,14 @@ class _InventoryPageState extends State<InventoryPage> {
   }
 
   void _addCustomSize(String itemKey, Map<String, dynamic> itemData, String collectionType, [String? subcategory]) {
-    // Debugging: Print inputs
-    print('Adding custom size for:');
-    print('Item Key: $itemKey');
-    print('Collection Type: $collectionType');
-    print('Subcategory: $subcategory');
 
-    // Handle the special case for Proware & PE
     if (collectionType == 'Proware & PE' && (subcategory == null || subcategory.isEmpty)) {
-      print('Error: Subcategory is required for Proware & PE');
       return;
     }
 
-    // Prepare data for update
     String size = _selectedSize ?? '';
     double? price = _priceController.text.isNotEmpty ? double.tryParse(_priceController.text) : null;
     int? newQuantity = _quantityController.text.isNotEmpty ? int.tryParse(_quantityController.text) : null;
-
-    // Update local itemData for UI consistency
     if (itemData['stock'].containsKey(size)) {
       int currentQuantity = itemData['stock'][size]['quantity'];
       double currentPrice = itemData['stock'][size]['price'];
@@ -382,7 +369,6 @@ class _InventoryPageState extends State<InventoryPage> {
       };
     }
 
-    // Determine Firestore reference and update data
     DocumentReference docRef;
     Map<String, dynamic> updateData = {
       if (newQuantity != null) 'sizes.$size.quantity': FieldValue.increment(newQuantity),
@@ -414,40 +400,24 @@ class _InventoryPageState extends State<InventoryPage> {
           .collection(subcategory!)
           .doc(itemKey);
     } else {
-      print('Invalid collection type: $collectionType');
       return;
     }
 
-    // Debugging: Print Firestore reference and update data
-    print('Firestore Reference: $docRef');
-    print('Update Data: $updateData');
-
-    // Perform Firestore update
     docRef.update(updateData).then((_) {
-      print('Custom size added successfully!');
       setState(() {
         if (collectionType == 'Proware & PE') {
           _fetchProwareStock();
         } else {
-          _fetchInventoryData(); // Reload inventory data for other categories
+          _fetchInventoryData();
         }
       });
     }).catchError((error) {
-      print('Error adding custom size: $error');
     });
   }
 
   void _updateQuantity(String itemKey, String size, int change, String collectionType, [String? subcategory]) {
-    // Debugging: Print inputs
-    print('Updating quantity for:');
-    print('Item Key: $itemKey');
-    print('Size: $size');
-    print('Change: $change');
-    print('Collection Type: $collectionType');
-    print('Subcategory: $subcategory');
 
     if (collectionType == 'Proware & PE' && subcategory == null) {
-      print('Error: Subcategory is required for Proware & PE');
       return;
     }
 
@@ -462,37 +432,50 @@ class _InventoryPageState extends State<InventoryPage> {
           .doc('senior_high_items')
           .collection('Items')
           .doc(itemKey);
+
+      setState(() {
+        int currentQuantity = _seniorHighStockQuantities[itemKey]?['stock'][size]['quantity'] ?? 0;
+        _seniorHighStockQuantities[itemKey]?['stock'][size]['quantity'] = currentQuantity + change;
+      });
     } else if (collectionType == 'college_items') {
       docRef = firestore
           .collection('Inventory_stock')
           .doc('college_items')
           .collection(_selectedCourseLabel!)
           .doc(itemKey);
+
+      setState(() {
+        int currentQuantity = _collegeStockQuantities[_selectedCourseLabel!]?[itemKey]?['stock'][size]['quantity'] ?? 0;
+        _collegeStockQuantities[_selectedCourseLabel!]?[itemKey]?['stock'][size]['quantity'] = currentQuantity + change;
+      });
     } else if (collectionType == 'Merch & Accessories') {
       docRef = firestore
           .collection('Inventory_stock')
           .doc('Merch & Accessories')
           .collection('Items')
           .doc(itemKey);
+
+      setState(() {
+        int currentQuantity = _merchStockQuantities[itemKey]?['stock'][size]['quantity'] ?? 0;
+        _merchStockQuantities[itemKey]?['stock'][size]['quantity'] = currentQuantity + change;
+      });
     } else if (collectionType == 'Proware & PE') {
       docRef = firestore
           .collection('Inventory_stock')
           .doc('Proware & PE')
           .collection(subcategory!)
           .doc(itemKey);
+
+      setState(() {
+        int currentQuantity = _prowareStockQuantities[subcategory]?[itemKey]?['stock'][size]['quantity'] ?? 0;
+        _prowareStockQuantities[subcategory]?[itemKey]?['stock'][size]['quantity'] = currentQuantity + change;
+      });
     } else {
-      print('Invalid collection type: $collectionType');
       return;
     }
 
-    // Perform Firestore update
     docRef.update(updateData).then((_) {
-      print('Quantity updated successfully!');
-      setState(() {
-        // Update local state if necessary
-      });
     }).catchError((error) {
-      print('Error updating quantity: $error');
     });
   }
 
@@ -511,15 +494,12 @@ class _InventoryPageState extends State<InventoryPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Display the label
           Text(
             "$label",
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             textAlign: TextAlign.center,
           ),
           SizedBox(height: 8),
-
-          // Display the image or a placeholder
           if (imagePath.isNotEmpty)
             Image.network(
               imagePath,
@@ -529,8 +509,6 @@ class _InventoryPageState extends State<InventoryPage> {
           else
             Icon(Icons.image_not_supported, size: 100),
           SizedBox(height: 8),
-
-          // Display the stock information
           if (stock.isNotEmpty)
             Expanded(
               child: SingleChildScrollView(
@@ -565,7 +543,6 @@ class _InventoryPageState extends State<InventoryPage> {
                           icon: Icon(Icons.remove),
                           onPressed: currentQuantity > 0
                               ? () {
-                            // Pass subcategory only if applicable
                             _updateQuantity(itemKey, size, -1, collectionType, subcategory);
                           }
                               : null,
@@ -573,7 +550,6 @@ class _InventoryPageState extends State<InventoryPage> {
                         IconButton(
                           icon: Icon(Icons.add),
                           onPressed: () {
-                            // Pass subcategory only if applicable
                             _updateQuantity(itemKey, size, 1, collectionType, subcategory);
                           },
                         ),
@@ -586,11 +562,8 @@ class _InventoryPageState extends State<InventoryPage> {
           else
             Text('No sizes available'),
           SizedBox(height: 8),
-
-          // Add Size Button
           ElevatedButton(
             onPressed: () {
-              // Pass subcategory only if applicable
               _showAddSizeDialog(itemKey, itemData, collectionType, subcategory);
             },
             child: Text('Add Size'),

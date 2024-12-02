@@ -165,7 +165,6 @@ class _MainWalkInPreOrderPageState extends State<WalkinPagePreOrder> {
       });
 
     } catch (e) {
-      print("Error fetching college stock: $e");
     }
   }
 
@@ -270,7 +269,6 @@ class _MainWalkInPreOrderPageState extends State<WalkinPagePreOrder> {
         _prowareStockQuantities = prowareData;
       });
     } catch (e) {
-      print("Error fetching Proware & PE stock: $e");
     }
   }
 
@@ -705,29 +703,22 @@ class _MainWalkInPreOrderPageState extends State<WalkinPagePreOrder> {
       );
 
       if (response.statusCode == 200) {
-        print("SMS sent successfully to $contactNumber");
       } else {
-        print("Failed to send SMS: ${response.body}");
       }
     } catch (e) {
-      print("Error sending SMS: $e");
     }
   }
 
   Future<void> _submitOrder() async {
     if (!_formKey.currentState!.validate()) {
-      print('Form validation failed.');
       return;
     }
 
     bool hasSelectedItem = _selectedQuantities.values.any((quantity) => quantity > 0);
     if (!hasSelectedItem) {
-      print('No items selected.');
       Get.snackbar('Error', 'No items selected. Please add at least one item to the order.');
       return;
     }
-
-    print('Starting order submission...');
     String studentName = _nameController.text.trim();
     String studentNumber = _studentNumberController.text.trim();
     String contactNumber = _contactNumberController.text.trim();
@@ -780,29 +771,25 @@ class _MainWalkInPreOrderPageState extends State<WalkinPagePreOrder> {
 
       Map<String, dynamic> preOrderData = {
         'items': cartItems,
-        'contactNumber': contactNumber, // Moved here, below the items list
+        'contactNumber': contactNumber,
         'preOrderDate': Timestamp.now(),
         'status': 'pre-order confirmed',
         'studentId': studentNumber,
         'userName': studentName,
       };
 
-      // Save pre-order to Firestore under the user's collection
       await FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
           .collection('preorders')
           .add(preOrderData);
 
-      print('Pre-order stored successfully in Firestore.');
 
       await _sendSMSToUser(contactNumber, studentName, studentNumber, 0.0, cartItems);
 
-      print('SMS sent successfully.');
       Get.snackbar('Success', 'Order submitted and saved successfully!');
       _refreshData();
     } catch (e) {
-      print('Error in _submitOrder: $e');
       Get.snackbar('Error', 'Failed to submit the order. Please try again.');
     }
   }

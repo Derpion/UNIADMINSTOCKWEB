@@ -79,7 +79,6 @@ class _SettingsPageState extends State<SettingsPage> {
           SnackBar(content: Text("Credentials updated successfully!")),
         );
       } catch (e) {
-        print("Error updating credentials: $e");
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Failed to update credentials: $e")),
         );
@@ -156,13 +155,11 @@ class _SettingsPageState extends State<SettingsPage> {
 
 
       } else {
-        print("No matching document found for label: $_selectedAnnouncement");
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Failed to find announcement document.")),
         );
       }
     } catch (e) {
-      print("Error updating Firestore with image URL: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Failed to update announcement image URL.")),
       );
@@ -175,10 +172,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
       String storagePath;
       if (forAnnouncement) {
-        // Store announcements directly in the root directory
         storagePath = 'Announcements/${DateTime.now().millisecondsSinceEpoch}.png';
       } else if (_selectedItemCategory == "Merch & Accessories") {
-        // Store merch images directly in the root directory
         storagePath = 'merch_images/${documentId}_${DateTime.now().millisecondsSinceEpoch}.png';
       } else if (_selectedItemCategory == "senior_high_items") {
         storagePath = 'senior_high_items/${documentId}_${DateTime.now().millisecondsSinceEpoch}.png';
@@ -218,7 +213,6 @@ class _SettingsPageState extends State<SettingsPage> {
         throw 'No image selected';
       }
     } catch (e) {
-      print("Error uploading image: $e");
       return '';
     } finally {
       setState(() {
@@ -338,7 +332,6 @@ class _SettingsPageState extends State<SettingsPage> {
       _refreshPage();
 
     } catch (e) {
-      print("Error adding/updating item: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Failed to add/update item: $e")),
       );
@@ -446,7 +439,6 @@ class _SettingsPageState extends State<SettingsPage> {
       _itemLabelController.clear();
 
     } catch (e) {
-      print("Error deleting item: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Failed to delete item: $e")),
       );

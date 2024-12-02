@@ -165,7 +165,6 @@ class _MainWalkInPageState extends State<WalkinPage> {
       });
 
     } catch (e) {
-      print("Error fetching college stock: $e");
     }
   }
 
@@ -270,7 +269,6 @@ class _MainWalkInPageState extends State<WalkinPage> {
         _prowareStockQuantities = prowareData;
       });
     } catch (e) {
-      print("Error fetching Proware & PE stock: $e");
     }
   }
 
@@ -705,29 +703,23 @@ class _MainWalkInPageState extends State<WalkinPage> {
       );
 
       if (response.statusCode == 200) {
-        print("SMS sent successfully to $contactNumber");
       } else {
-        print("Failed to send SMS: ${response.body}");
       }
     } catch (e) {
-      print("Error sending SMS: $e");
     }
   }
 
   Future<void> _submitOrder() async {
     if (!_formKey.currentState!.validate()) {
-      print('Form validation failed.');
       return;
     }
 
     bool hasSelectedItem = _selectedQuantities.values.any((quantity) => quantity > 0);
     if (!hasSelectedItem) {
-      print('No items selected.');
       Get.snackbar('Error', 'No items selected. Please add at least one item to the order.');
       return;
     }
 
-    print('Starting order submission...');
     String studentName = _nameController.text;
     String studentNumber = _studentNumberController.text;
     String contactNumber = _contactNumberController.text;
@@ -776,9 +768,6 @@ class _MainWalkInPageState extends State<WalkinPage> {
         }
       }
 
-      print('Cart Items: $cartItems');
-      print('Total Amount: $totalAmount');
-
       CollectionReference approvedReservationsRef =
       FirebaseFirestore.instance.collection('approved_reservation');
       await approvedReservationsRef.add({
@@ -789,15 +778,12 @@ class _MainWalkInPageState extends State<WalkinPage> {
         'items': cartItems,
       });
 
-      print('Order stored in Firestore.');
 
       await _sendSMSToUser(contactNumber, studentName, studentNumber, totalAmount, cartItems);
 
-      print('SMS sent successfully.');
       Get.snackbar('Success', 'Order submitted and SMS sent successfully!');
       _refreshData();
     } catch (e) {
-      print('Error in _submitOrder: $e');
       Get.snackbar('Error', 'Failed to submit the order. Please try again.');
     }
   }
@@ -805,14 +791,11 @@ class _MainWalkInPageState extends State<WalkinPage> {
   Future<double> _getItemPrice(String category, String itemLabel, String? courseLabel, String selectedSize, [String? subcategory,]) async {
     double price = 0.0;
 
-    print('Fetching price for: $itemLabel, Category: $category, Size: $selectedSize, CourseLabel: $courseLabel, Subcategory: $subcategory');
-
     if (category == 'senior_high_items') {
       final itemData = _seniorHighStockQuantities[itemLabel];
       if (itemData != null) {
         price = itemData['sizes']?[selectedSize]?['price'] ?? itemData['defaultPrice'] ?? 0.0;
       }
-      print('Senior High Price: $price');
     } else if (category == 'college_items' && courseLabel != null) {
       try {
         final courseCollection = FirebaseFirestore.instance
@@ -825,31 +808,24 @@ class _MainWalkInPageState extends State<WalkinPage> {
         if (querySnapshot.docs.isNotEmpty) {
           final itemData = querySnapshot.docs.first.data() as Map<String, dynamic>;
           price = itemData['sizes']?[selectedSize]?['price'] ?? itemData['price'] ?? 0.0;
-          print('College Price for $itemLabel (Size: $selectedSize): $price');
         } else {
-          print('Item not found in college_items for $itemLabel under course $courseLabel');
         }
       } catch (e) {
-        print('Error fetching college_items: $e');
       }
     } else if (category == 'Merch & Accessories') {
       final itemData = _merchStockQuantities[itemLabel];
       if (itemData != null) {
         price = itemData['sizes']?[selectedSize]?['price'] ?? itemData['defaultPrice'] ?? 0.0;
       }
-      print('Merch Price: $price');
     } else if (category == 'Proware & PE' && subcategory != null) {
       final itemData = _prowareStockQuantities[subcategory]?[itemLabel];
       if (itemData != null) {
         price = itemData['sizes']?[selectedSize]?['price'] ?? itemData['defaultPrice'] ?? 0.0;
       }
-      print('Proware & PE Price: $price');
     } else {
-      print('Unknown category: $category');
     }
 
     if (price == 0.0) {
-      print('Price not found for item: $itemLabel, Size: $selectedSize');
     }
 
     return price;
