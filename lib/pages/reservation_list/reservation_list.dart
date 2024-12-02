@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
 class ReservationListPage extends StatefulWidget {
@@ -15,6 +16,24 @@ class _ReservationListPageState extends State<ReservationListPage> {
   final ScrollController _horizontalController = ScrollController();
 
   bool isLoading = true;
+
+  String normalizeCategory(String category) {
+    switch (category) {
+      case 'senior_high_items':
+        return 'Senior High Items';
+      case 'college_items':
+        return 'College Items';
+      case 'proware_and_pe':
+      case 'Proware & PE':
+        return 'Proware & PE';
+      case 'merch_and_accessories':
+      case 'Merch & Accessories':
+        return 'Merch & Accessories';
+      default:
+        return category; // Fallback for unexpected categories
+    }
+  }
+
 
   @override
   void initState() {
@@ -59,7 +78,13 @@ class _ReservationListPageState extends State<ReservationListPage> {
         reservationData['userId'] = userDoc.id;
         reservationData['category'] = reservationData['category'] ?? 'Unknown Category';
         reservationData['label'] = reservationData['label'] ?? 'No Label';
-        reservationData['courseLabel'] = reservationData['courseLabel'] ?? 'Unknown Course';
+
+        // Dynamically assign courseLabel or subcategory based on the category
+        if (reservationData['category'] == 'Proware & PE') {
+          reservationData['subcategory'] = reservationData['subcategory'] ?? 'Unknown Subcategory';
+        } else {
+          reservationData['courseLabel'] = reservationData['courseLabel'] ?? 'Unknown Course';
+        }
 
         if (reservationData.containsKey('items') && reservationData['items'] is List) {
           List<dynamic> orderItems = reservationData['items'];
@@ -90,8 +115,13 @@ class _ReservationListPageState extends State<ReservationListPage> {
           reservationData['size'] = itemSize;
           reservationData['quantity'] = quantity;
           reservationData['label'] = reservationData['label'];
-          reservationData['courseLabel'] = reservationData['courseLabel'];
-          reservationData['category'] = reservationData['category'];
+
+          // Dynamically assign courseLabel or subcategory
+          if (reservationData['category'] == 'Proware & PE') {
+            reservationData['subcategory'] = reservationData['subcategory'] ?? 'Unknown Subcategory';
+          } else {
+            reservationData['courseLabel'] = reservationData['courseLabel'] ?? 'Unknown Course';
+          }
         }
         pendingReservations.add(reservationData);
       }
@@ -113,14 +143,12 @@ class _ReservationListPageState extends State<ReservationListPage> {
     });
   }
 
-
   Future<void> _approveReservation(Map<String, dynamic> reservation) async {
     try {
       String userId = reservation['userId'] ?? '';
       String orderId = reservation['orderId'] ?? '';
       String userName = reservation['userName'] ?? 'Unknown User';
       String studentId = reservation['studentId'] ?? 'Unknown ID';
-      String studentName = reservation['userName'] ?? 'Unknown User';
 
       if (userId.isEmpty || orderId.isEmpty) {
         throw Exception('Invalid reservation data: userId or orderId is missing.');
@@ -140,17 +168,25 @@ class _ReservationListPageState extends State<ReservationListPage> {
       Timestamp reservationDate = orderDoc['orderDate'] ?? Timestamp.now();
       List<dynamic> orderItems = reservation['items'] ?? [];
 
-      // Aggregate items into a single document for bulk orders
       if (orderItems.isNotEmpty) {
         List<Map<String, dynamic>> approvedItems = [];
+
         for (var item in orderItems) {
+          String label = item['label'] ?? 'No Label';
+          String size = item['itemSize'] ?? 'Unknown Size';
+          int quantity = item['quantity'] ?? 1;
+          String mainCategory = item['category'] ?? 'Unknown Category';
+          String subCategory = item['courseLabel'] ?? 'Unknown Course';
+
+          await _validateAndProcessStock(mainCategory, subCategory, label, size, quantity);
+
           approvedItems.add({
-            'label': item['label'] ?? 'No Label',
-            'itemSize': item['itemSize'] ?? 'Unknown Size',
-            'quantity': item['quantity'] ?? 1,
+            'label': label,
+            'itemSize': size,
+            'quantity': quantity,
             'pricePerPiece': item['price'] ?? 0.0,
-            'mainCategory': item['category'] ?? 'Unknown Category',
-            'subCategory': item['courseLabel'] ?? 'Unknown Course',
+            'mainCategory': mainCategory,
+            'subCategory': subCategory,
           });
         }
 
@@ -163,16 +199,23 @@ class _ReservationListPageState extends State<ReservationListPage> {
           'studentId': studentId,
         });
       } else {
-        // For single item reservation
+        String label = reservation['label'] ?? 'No Label';
+        String size = reservation['itemSize'] ?? 'Unknown Size';
+        int quantity = reservation['quantity'] ?? 1;
+        String mainCategory = reservation['category'] ?? 'Unknown Category';
+        String subCategory = reservation['courseLabel'] ?? 'Unknown Course';
+
+        await _validateAndProcessStock(mainCategory, subCategory, label, size, quantity);
+
         await _firestore.collection('approved_reservation').add({
           'reservationDate': reservationDate,
           'approvalDate': FieldValue.serverTimestamp(),
-          'label': reservation['label'],
-          'itemSize': reservation['itemSize'],
-          'quantity': reservation['quantity'],
-          'pricePerPiece': reservation['price'],
-          'mainCategory': reservation['category'],
-          'subCategory': reservation['courseLabel'],
+          'label': label,
+          'itemSize': size,
+          'quantity': quantity,
+          'pricePerPiece': reservation['price'] ?? 0.0,
+          'mainCategory': mainCategory,
+          'subCategory': subCategory,
           'name': userName,
           'userId': userId,
           'studentId': studentId,
@@ -181,7 +224,6 @@ class _ReservationListPageState extends State<ReservationListPage> {
 
       await _firestore.collection('users').doc(userId).collection('orders').doc(orderId).update({'status': 'approved'});
 
-      await _sendNotificationToUser(userId, userName, studentName, studentId, reservation);
       await _fetchAllPendingReservations();
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -190,9 +232,7 @@ class _ReservationListPageState extends State<ReservationListPage> {
           backgroundColor: Colors.green,
         ),
       );
-
     } catch (e) {
-      print('Error approving reservation: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to approve reservation: $e'),
@@ -200,6 +240,107 @@ class _ReservationListPageState extends State<ReservationListPage> {
         ),
       );
     }
+  }
+
+  Future<void> _validateAndProcessStock(String category, String subcategoryOrCourseLabel, String label, String size, int quantity) async {
+    try {
+      // Normalize the category for consistent handling
+      category = normalizeCategory(category);
+
+      if (category == 'Merch & Accessories') {
+        // Handle Merch & Accessories
+        DocumentSnapshot merchDoc =
+        await _firestore.collection('Inventory_stock').doc('Merch & Accessories').get();
+
+        if (!merchDoc.exists) {
+          throw Exception('Merch & Accessories document not found.');
+        }
+
+        Map<String, dynamic> merchData = merchDoc.data() as Map<String, dynamic>;
+        if (merchData.containsKey(label)) {
+          Map<String, dynamic> itemData = merchData[label] as Map<String, dynamic>;
+          await _processItemStock(itemData, label, size, quantity, category, subcategoryOrCourseLabel);
+        } else {
+          throw Exception('Item "$label" not found in Merch & Accessories inventory.');
+        }
+      } else if (category == 'College Items') {
+        // Handle College Items
+        CollectionReference itemsRef =
+        _firestore.collection('Inventory_stock').doc('college_items').collection(subcategoryOrCourseLabel);
+        QuerySnapshot querySnapshot = await itemsRef.where('label', isEqualTo: label).limit(1).get();
+
+        if (querySnapshot.docs.isNotEmpty) {
+          DocumentSnapshot itemDoc = querySnapshot.docs.first;
+          Map<String, dynamic> itemData = itemDoc.data() as Map<String, dynamic>;
+          await _processItemStock(itemData, label, size, quantity, category, subcategoryOrCourseLabel,
+              docRef: itemDoc.reference);
+        } else {
+          throw Exception('Item "$label" not found in College Items inventory.');
+        }
+      } else if (category == 'Senior High Items') {
+        // Handle Senior High Items
+        CollectionReference itemsRef =
+        _firestore.collection('Inventory_stock').doc('senior_high_items').collection('Items');
+        QuerySnapshot querySnapshot = await itemsRef.where('label', isEqualTo: label).limit(1).get();
+
+        if (querySnapshot.docs.isNotEmpty) {
+          DocumentSnapshot itemDoc = querySnapshot.docs.first;
+          Map<String, dynamic> itemData = itemDoc.data() as Map<String, dynamic>;
+          await _processItemStock(itemData, label, size, quantity, category, subcategoryOrCourseLabel,
+              docRef: itemDoc.reference);
+        } else {
+          throw Exception('Item "$label" not found in Senior High Items inventory.');
+        }
+      } else if (category == 'Proware & PE') {
+        // Handle Proware & PE
+        CollectionReference itemsRef =
+        _firestore.collection('Inventory_stock').doc('Proware & PE').collection(subcategoryOrCourseLabel);
+        QuerySnapshot querySnapshot = await itemsRef.where('label', isEqualTo: label).limit(1).get();
+
+        if (querySnapshot.docs.isNotEmpty) {
+          DocumentSnapshot itemDoc = querySnapshot.docs.first;
+          Map<String, dynamic> itemData = itemDoc.data() as Map<String, dynamic>;
+          await _processItemStock(itemData, label, size, quantity, category, subcategoryOrCourseLabel,
+              docRef: itemDoc.reference);
+        } else {
+          throw Exception('Item "$label" not found in Proware & PE under $subcategoryOrCourseLabel.');
+        }
+      } else {
+        throw Exception('Unknown category: $category');
+      }
+    } catch (e) {
+      throw Exception('Failed to process stock: $e');
+    }
+  }
+
+  Future<void> _processItemStock(Map<String, dynamic> itemData, String label, String size, int quantity, String category, String subCategory, {DocumentReference? docRef,}) async {
+    if (itemData.containsKey('sizes') && itemData['sizes'][size] != null) {
+      int currentStock = itemData['sizes'][size]['quantity'] ?? 0;
+
+      if (currentStock >= quantity) {
+        itemData['sizes'][size]['quantity'] = currentStock - quantity;
+
+        if (docRef != null) {
+          await docRef.update({'sizes': itemData['sizes']});
+        } else {
+          await _firestore.collection('Inventory_stock').doc(category).update({label: itemData});
+        }
+      } else {
+        throw Exception(
+            'Insufficient stock for $label size $size. Available: $currentStock, Required: $quantity.');
+      }
+    } else {
+      throw Exception('Size "$size" not available for item "$label".');
+    }
+  }
+
+  void _notifyUser(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.orange,
+      ),
+    );
   }
 
   Future<void> _sendNotificationToUser(String userId, String userName, String studentName, String studentId, Map<String, dynamic> reservation) async {
@@ -252,9 +393,7 @@ class _ReservationListPageState extends State<ReservationListPage> {
         'status': 'unread',
       });
 
-      print('Notification sent to user: $userName');
     } catch (e) {
-      print('Error sending notification: $e');
     }
   }
 
@@ -266,10 +405,7 @@ class _ReservationListPageState extends State<ReservationListPage> {
       if (userId.isEmpty || orderId.isEmpty) {
         throw Exception('Invalid reservation data: userId or orderId is missing.');
       }
-
-      // Delete the reservation from Firestore
       await _firestore.collection('users').doc(userId).collection('orders').doc(orderId).delete();
-
       await _fetchAllPendingReservations();
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -279,7 +415,6 @@ class _ReservationListPageState extends State<ReservationListPage> {
         ),
       );
     } catch (e) {
-      print('Error rejecting reservation: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to reject reservation: $e'),

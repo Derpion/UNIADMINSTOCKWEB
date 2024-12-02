@@ -13,6 +13,7 @@ class _SalesStatisticsPageState extends State<SalesStatisticsPage> {
   Map<String, double> _collegeSalesData = {};
   Map<String, double> _seniorHighSalesData = {};
   Map<String, double> _merchSalesData = {};
+  Map<String, double> _prowareSalesData = {};
   String _selectedPeriod = 'Overall';
 
   @override
@@ -45,39 +46,35 @@ class _SalesStatisticsPageState extends State<SalesStatisticsPage> {
       Map<String, double> collegeSales = {};
       Map<String, double> seniorHighSales = {};
       Map<String, double> merchSales = {};
+      Map<String, double> prowareSales = {}; // New for Proware & PE
 
       DateTime now = DateTime.now();
       DateTime startDate;
 
-      // Adjust start date based on the selected period
       if (_selectedPeriod == 'Daily') {
-        startDate = DateTime(now.year, now.month, now.day); // Start of today
+        startDate = DateTime(now.year, now.month, now.day);
       } else if (_selectedPeriod == 'Weekly') {
-        startDate = now.subtract(
-            Duration(days: now.weekday)); // Start of the week (Monday)
+        startDate = now.subtract(Duration(days: now.weekday));
       } else if (_selectedPeriod == 'Monthly') {
-        startDate =
-            DateTime(now.year, now.month - 1, 1); // Start of the previous month
+        startDate = DateTime(now.year, now.month - 1, 1);
       } else {
-        startDate = DateTime(1970); // 'Overall' - includes all data
+        startDate = DateTime(1970);
       }
 
       Timestamp firestoreStartDate = Timestamp.fromDate(startDate);
 
       QuerySnapshot adminTransactionsSnapshot;
       if (_selectedPeriod == 'Overall') {
-        // Get all data without filtering by date, just order by timestamp
         adminTransactionsSnapshot = await _firestore
             .collection('admin_transactions')
             .orderBy('timestamp')
-            .get(); // Force a fresh fetch, not using cached data
+            .get();
       } else {
-        // Filter by date range using the startDate and force fresh data fetch
         adminTransactionsSnapshot = await _firestore
             .collection('admin_transactions')
             .where('timestamp', isGreaterThanOrEqualTo: firestoreStartDate)
             .orderBy('timestamp')
-            .get(); // Force a fresh fetch, not using cached data
+            .get();
       }
 
       for (var doc in adminTransactionsSnapshot.docs) {
@@ -91,10 +88,12 @@ class _SalesStatisticsPageState extends State<SalesStatisticsPage> {
 
             if (category == 'senior high items' || category == 'senior_high_items') {
               seniorHighSales[itemLabel] = (seniorHighSales[itemLabel] ?? 0) + quantity;
-            } else if (category == 'college_items' || category == 'senior_high_items') {
+            } else if (category == 'college_items' || category == 'college items') {
               collegeSales[itemLabel] = (collegeSales[itemLabel] ?? 0) + quantity;
             } else if (category == 'Merch & Accessories' || category == 'merch_and_accessories') {
               merchSales[itemLabel] = (merchSales[itemLabel] ?? 0) + quantity;
+            } else if (category == 'Proware & PE' || category == 'proware_and_pe') { // Handle Proware & PE
+              prowareSales[itemLabel] = (prowareSales[itemLabel] ?? 0) + quantity;
             }
           }
         }
@@ -104,6 +103,7 @@ class _SalesStatisticsPageState extends State<SalesStatisticsPage> {
         _collegeSalesData = collegeSales;
         _seniorHighSalesData = seniorHighSales;
         _merchSalesData = merchSales;
+        _prowareSalesData = prowareSales; // Save the data for Proware & PE
         _isLoading = false;
       });
     } catch (e) {
@@ -167,12 +167,22 @@ class _SalesStatisticsPageState extends State<SalesStatisticsPage> {
               ),
               SizedBox(height: 20),
               _buildPieChart(_merchSalesData),
+              SizedBox(height: 50),
+              Divider(thickness: 2),
+              SizedBox(height: 50),
+              Text(
+                "Proware & PE Sales Distribution (${_selectedPeriod})",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              SizedBox(height: 20),
+              _buildPieChart(_prowareSalesData), // Proware & PE Pie Chart
             ],
           ),
         ),
       ),
     );
   }
+
 
   Widget _buildPieChart(Map<String, double> salesData) {
     return Center(

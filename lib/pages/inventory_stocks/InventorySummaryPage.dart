@@ -11,10 +11,11 @@ class InventorySummaryPage extends StatefulWidget {
 
 class _InventorySummaryPageState extends State<InventorySummaryPage> {
   FirebaseFirestore firestore = FirebaseFirestore.instance;
-
+  String? _selectedSubcategory;
   Map<String, Map<String, dynamic>> _seniorHighStock = {};
   Map<String, Map<String, dynamic>> _collegeStock = {};
   Map<String, Map<String, dynamic>> _merchStock = {};
+  Map<String, Map<String, dynamic>> _prowareStock = {};
   Map<String, Map<String, Map<String, int>>> _soldData = {};
 
   bool _loading = true;
@@ -35,10 +36,11 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
         _fetchSeniorHighStock(),
         _fetchCollegeStock(),
         _fetchMerchStock(),
-        _fetchSoldData(), // Fetch sold data
+        _fetchProwareStock(),
+        _fetchSoldData(),
       ]);
 
-      debugSoldData(); // Debug Sold Data keys
+      debugSoldData();
 
       setState(() {
         _loading = false;
@@ -74,18 +76,14 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
               String size = (item['itemSize'] ?? '').toLowerCase().trim();
               int quantity = item['quantity'] ?? 0;
 
-              // Ensure the structure exists
-              newSoldData[category] = newSoldData[category] ?? {};
-              newSoldData[category]![label] = newSoldData[category]![label] ?? {};
-              newSoldData[category]![label]![size] = (newSoldData[category]![label]![size] ?? 0) + quantity;
-
-              print("Processed item - Category: $category, Label: $label, Size: $size, Quantity: $quantity");
+              // Ensure the mapping is consistent
+              newSoldData.putIfAbsent(category, () => {});
+              newSoldData[category]!.putIfAbsent(label, () => {});
+              newSoldData[category]![label]!.update(size, (value) => value + quantity, ifAbsent: () => quantity);
             }
           }
         }
       }
-
-      print("Final Sold Data: $newSoldData");
 
       setState(() {
         _soldData = newSoldData;
@@ -219,11 +217,60 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
     }
   }
 
+  Future<void> _fetchProwareStock() async {
+    try {
+      List<String> subcategories = ['NSTP', 'PE', 'Proware'];
+      Map<String, Map<String, dynamic>> prowareData = {};
+
+      for (String subcategory in subcategories) {
+        QuerySnapshot subcategorySnapshot = await firestore
+            .collection('Inventory_stock')
+            .doc('Proware & PE')
+            .collection(subcategory)
+            .get();
+
+        Map<String, Map<String, dynamic>> subcategoryItems = {};
+        for (var doc in subcategorySnapshot.docs) {
+          Map<String, dynamic> docData = doc.data() as Map<String, dynamic>;
+
+          Map<String, dynamic> stockData = {};
+          if (docData.containsKey('sizes') && docData['sizes'] is Map) {
+            Map<String, dynamic> sizes = docData['sizes'] as Map<String, dynamic>;
+            sizes.forEach((sizeKey, sizeValue) {
+              if (sizeValue is Map && sizeValue.containsKey('quantity')) {
+                stockData[sizeKey] = {
+                  'quantity': sizeValue['quantity'] ?? 0,
+                  'price': sizeValue['price'] ?? 0.0,
+                };
+              }
+            });
+          }
+
+          subcategoryItems[doc.id] = {
+            'label': docData['label'] ?? doc.id,
+            'stock': stockData,
+            'subcategory': subcategory, // Store subcategory information
+          };
+        }
+
+        prowareData[subcategory] = subcategoryItems;
+      }
+
+      // Update state with fetched Proware & PE data
+      setState(() {
+        _prowareStock = prowareData;
+      });
+    } catch (e) {
+      print("Error fetching Proware & PE stock: $e");
+    }
+  }
+
   Widget _buildStockSummary(String category, Map<String, Map<String, dynamic>>? stockData) {
     final categoryMapping = {
       'Senior High': 'senior_high_items',
       'College': 'college_items',
       'Merch & Accessories': 'merch & accessories',
+      'Proware & PE': 'proware_and_pe',
     };
 
     String soldDataCategory = categoryMapping[category] ?? category.toLowerCase();
@@ -248,8 +295,8 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
       );
     }
 
+    // Handle College category
     if (category == 'College') {
-      // College-specific rendering with dropdown
       return Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -311,7 +358,49 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
       );
     }
 
-    // Non-college categories
+    if (category == 'Proware & PE') {
+      final subcategories = stockData?.keys.toList() ?? [];
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Center(
+            child: Text(
+              '$category Summary',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          SizedBox(height: 8),
+          DropdownButton<String>(
+            value: _selectedSubcategory,
+            hint: Text('Select Subcategory'),
+            onChanged: (value) {
+              setState(() {
+                _selectedSubcategory = value; // Update selected subcategory
+              });
+
+              // Debugging for dynamic matching
+              print('Selected Subcategory: $_selectedSubcategory');
+              final subcategorySoldData = _extractSoldDataForSubcategory(value, _soldData['proware & pe'] ?? {});
+              print('Sold Data for Subcategory: $subcategorySoldData');
+            },
+            items: subcategories.map((subcategory) {
+              return DropdownMenuItem<String>(
+                value: subcategory,
+                child: Text(subcategory),
+              );
+            }).toList(),
+          ),
+          if (_selectedSubcategory != null)
+            ..._buildProwareSubcategoryItems(
+              stockData[_selectedSubcategory!] ?? {},
+              _extractSoldDataForSubcategory(_selectedSubcategory, _soldData['proware & pe'] ?? {}),
+            ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -363,6 +452,76 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
     );
   }
 
+  Map<String, Map<String, int>> _extractSoldDataForSubcategory(
+      String? subcategory, Map<String, Map<String, int>> soldData) {
+    if (subcategory == null) return {};
+
+    // Normalize subcategory name
+    final normalizedSubcategory = normalizeKey(subcategory);
+
+    // Filter sold data for items that belong to the selected subcategory
+    final filteredSoldData = <String, Map<String, int>>{};
+    soldData.forEach((soldKey, soldSizes) {
+      if (normalizeKey(soldKey).contains(normalizedSubcategory)) {
+        filteredSoldData[soldKey] = soldSizes;
+      }
+    });
+
+    return filteredSoldData;
+  }
+
+
+  String normalizeKey(String key) => key.toLowerCase().trim();
+
+  Map<String, int> matchSoldData(String label, Map<String, Map<String, int>> soldData) {
+    final normalizedLabel = normalizeKey(label);
+    return soldData.entries
+        .firstWhere((entry) => normalizeKey(entry.key) == normalizedLabel, orElse: () => MapEntry("", {}))
+        .value;
+  }
+
+  List<Widget> _buildProwareSubcategoryItems(Map<String, dynamic> subcategoryData, Map<String, Map<String, int>> soldData) {
+    return subcategoryData.keys.map((itemKey) {
+      final item = subcategoryData[itemKey];
+      final label = item['label'] ?? itemKey;
+      final stock = item['stock'] as Map<String, dynamic>? ?? {};
+      final normalizedLabel = normalizeKey(label);
+
+      // Match sold data for the current item
+      final soldItems = soldData[normalizedLabel] ?? {};
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Center(
+            child: Text(label, style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          Center(
+            child: DataTable(
+              columns: [
+                DataColumn(label: Center(child: Text('Size'))),
+                DataColumn(label: Center(child: Text('Quantity On Hand'))),
+                DataColumn(label: Center(child: Text('Quantity Sold'))),
+                DataColumn(label: Center(child: Text('Price'))),
+              ],
+              rows: stock.keys.map((sizeKey) {
+                final size = stock[sizeKey];
+                final soldQuantity = soldItems[sizeKey.toLowerCase()] ?? 0; // Match size keys
+                return DataRow(cells: [
+                  DataCell(Center(child: Text(sizeKey))),
+                  DataCell(Center(child: Text('${size['quantity']}'))),
+                  DataCell(Center(child: Text('$soldQuantity'))),
+                  DataCell(Center(child: Text('₱${size['price'].toStringAsFixed(2)}'))),
+                ]);
+              }).toList(),
+            ),
+          ),
+          Divider(thickness: 1),
+        ],
+      );
+    }).toList();
+  }
+
   Future<void> _printSummary() async {
     final pdf = pw.Document();
 
@@ -370,6 +529,7 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
       {"title": "Senior High Summary", "data": _seniorHighStock, "soldCategory": "senior_high_items"},
       {"title": "College Summary", "data": _collegeStock, "soldCategory": "college_items"},
       {"title": "Merch & Accessories Summary", "data": _merchStock, "soldCategory": "merch & accessories"},
+      {"title": "Proware & PE Summary", "data": _prowareStock, "soldCategory": "proware & pe"},
     ];
 
     for (var category in categorySummaries) {
@@ -392,28 +552,28 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
         ),
       );
 
-      // Handle nested College data
-      if (categoryTitle == "College Summary") {
-        stockData.forEach((courseKey, courseData) {
+      // Handle Proware & PE separately for subcategories
+      if (categoryTitle == "Proware & PE Summary") {
+        stockData.forEach((subcategory, subcategoryData) {
           categoryWidgets.add(
             pw.Padding(
               padding: const pw.EdgeInsets.only(top: 12),
               child: pw.Text(
-                courseKey,
+                subcategory,
                 style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
               ),
             ),
           );
 
-          courseData.forEach((itemKey, item) {
+          subcategoryData.forEach((itemKey, item) {
             final label = item['label'] ?? itemKey;
             final stock = item['stock'] as Map<String, dynamic>? ?? {};
-            final normalizedLabel = label.toString().toLowerCase().trim();
+            final normalizedLabel = normalizeKey(label);
             Map<String, int> soldItems = categorySoldData[normalizedLabel] ?? {};
 
             if (soldItems.isEmpty) {
               soldItems = categorySoldData.entries.firstWhere(
-                    (entry) => entry.key.toLowerCase().trim() == normalizedLabel,
+                    (entry) => normalizeKey(entry.key) == normalizedLabel,
                 orElse: () => MapEntry("", {}),
               ).value;
             }
@@ -451,7 +611,7 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
           });
         });
       } else {
-        // Handle other categories (e.g., Senior High, Merch & Accessories)
+        // Handle other categories (e.g., Senior High, College, Merch & Accessories)
         stockData.forEach((itemKey, item) {
           final label = item['label'] ?? itemKey;
           final stock = item['stock'] as Map<String, dynamic>? ?? {};
@@ -553,6 +713,7 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
             _buildStockSummary('Senior High', _seniorHighStock),
             _buildStockSummary('College', _collegeStock),
             _buildStockSummary('Merch & Accessories', _merchStock),
+            _buildStockSummary('Proware & PE', _prowareStock),
           ],
         ),
       ),

@@ -16,14 +16,25 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
   final ScrollController _verticalController = ScrollController();
   final ScrollController _horizontalController = ScrollController();
 
+  final TextEditingController _searchController = TextEditingController(); // Search Controller
+  List<Map<String, dynamic>> _filteredSalesData = []; // Filtered Sales Data
+
   Set<String> expandedBulkOrders = Set<String>();
   Future<List<Map<String, dynamic>>>? _salesDataFuture;
+  List<Map<String, dynamic>> _allSalesItems = []; // All Sales Items
   double _totalRevenue = 0.0;
 
   @override
   void initState() {
     super.initState();
     _salesDataFuture = _fetchSalesData();
+    _searchController.addListener(_filterSalesData); // Add listener to search input
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<List<Map<String, dynamic>>> _fetchSalesData() async {
@@ -51,7 +62,7 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
               'label': item['label'] ?? 'N/A',
               'itemSize': item['itemSize'] ?? 'N/A',
               'quantity': item['quantity'] ?? 0,
-              'mainCategory': item['mainCategory'] ?? 'N/A', // Explicitly add mainCategory
+              'mainCategory': item['mainCategory'] ?? 'N/A',
               'totalPrice': item['totalPrice'] ?? 0.0,
             };
           }).toList(),
@@ -63,14 +74,40 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
 
     setState(() {
       _totalRevenue = totalRevenue;
+      _allSalesItems = allSalesItems;
+      _filteredSalesData = List.from(allSalesItems); // Initialize filtered data
     });
 
     return allSalesItems;
   }
 
+  void _filterSalesData() {
+    String query = _searchController.text.toLowerCase();
+    setState(() {
+      if (query.isEmpty) {
+        _filteredSalesData = List.from(_allSalesItems); // Reset to all data
+      } else {
+        _filteredSalesData = _allSalesItems.where((sale) {
+          if (sale['isBulk'] == true) {
+            // Check each item in bulk orders
+            return (sale['items'] as List).any((item) =>
+                (item['label'] ?? '').toString().toLowerCase().contains(query));
+          } else {
+            // Check single orders
+            return (sale['items'][0]['label'] ?? '')
+                .toString()
+                .toLowerCase()
+                .contains(query);
+          }
+        }).toList();
+      }
+    });
+  }
+
   Future<void> _generatePDF(List<Map<String, dynamic>> salesData) async {
     final pdf = pw.Document();
     const int rowsPerPage = 10; // 10 data rows + 1 header row
+    final String currentDateTime = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
 
     int pageCount = (salesData.length / rowsPerPage).ceil();
     for (int page = 0; page < pageCount; page++) {
@@ -85,14 +122,15 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
           build: (pw.Context context) {
             return pw.Column(
               children: [
+                pw.Text('Generated on: $currentDateTime', style: pw.TextStyle(fontSize: 12, fontStyle: pw.FontStyle.italic),),
                 pw.Text('Sales Report (Page ${page + 1} of $pageCount)', style: pw.TextStyle(fontSize: 20)),
-                pw.SizedBox(height: 8),
+                pw.SizedBox(height: 4),
                 pw.Table(
                   border: pw.TableBorder.all(color: PdfColors.black, width: 1),
                   columnWidths: {
                     for (int i = 0; i < 7; i++)
                       i: const pw.FixedColumnWidth(
-                          80), // Set each column width to 80
+                          80),
                   },
                   children: [
                     // Header row
@@ -223,7 +261,6 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
       onLayout: (PdfPageFormat format) async => pdf.save(),
     );
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -252,21 +289,34 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
           ),
         ],
       ),
-      body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _salesDataFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
-            return Center(child: CustomText(text: "Error fetching sales history"));
-          } else if (snapshot.hasData && snapshot.data!.isEmpty) {
-            return Center(child: CustomText(text: "No sales history found"));
-          } else if (snapshot.hasData) {
-            final allSalesItems = snapshot.data!;
-            return Column(
-              children: [
-                Expanded(
-                  child: Scrollbar(
+      body: Column(
+        children: [
+          // Add Search Bar
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                labelText: 'Search by Item Label',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+
+          // Sales Data Table
+          Expanded(
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _salesDataFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(child: CircularProgressIndicator());
+                } else if (snapshot.hasError) {
+                  return Center(child: CustomText(text: "Error fetching sales history"));
+                } else if (snapshot.hasData && _filteredSalesData.isEmpty) {
+                  return Center(child: CustomText(text: "No sales history found for your query"));
+                } else if (snapshot.hasData) {
+                  return Scrollbar(
                     controller: _verticalController,
                     thumbVisibility: true,
                     child: SingleChildScrollView(
@@ -288,7 +338,7 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
                             DataColumn(label: Text('Total Price')),
                             DataColumn(label: Text('Order Date')),
                           ],
-                          rows: allSalesItems.expand<DataRow>((sale) {
+                          rows: _filteredSalesData.expand<DataRow>((sale) {
                             bool isBulkOrder = sale['isBulk'];
                             bool isExpanded = expandedBulkOrders.contains(sale['orNumber']);
                             List<DataRow> rows = [];
@@ -296,7 +346,7 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
                             // Main row for each transaction
                             rows.add(
                               DataRow(
-                                key: ValueKey('${sale['orNumber']}_main'), // Unique key for main row
+                                key: ValueKey('${sale['orNumber']}_main'),
                                 cells: [
                                   DataCell(
                                     Row(
@@ -322,7 +372,9 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
                                   DataCell(Text(sale['userName'] ?? 'N/A')),
                                   DataCell(Text(sale['studentNumber'] ?? 'N/A')),
                                   DataCell(Text(
-                                    isBulkOrder ? 'Bulk Order (${sale['items'].length} items)' : sale['items'][0]['label'] ?? 'N/A',
+                                    isBulkOrder
+                                        ? 'Bulk Order (${sale['items'].length} items)'
+                                        : sale['items'][0]['label'] ?? 'N/A',
                                   )),
                                   DataCell(Text(isBulkOrder ? '' : sale['items'][0]['itemSize'] ?? 'N/A')),
                                   DataCell(Text(isBulkOrder ? '' : '${sale['items'][0]['quantity']}')),
@@ -341,7 +393,7 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
                             if (isExpanded) {
                               rows.addAll((sale['items'] as List).map<DataRow>((item) {
                                 return DataRow(
-                                  key: ValueKey('${sale['orNumber']}_${item['label']}_${item['itemSize']}'), // Unique key for each item row
+                                  key: ValueKey('${sale['orNumber']}_${item['label']}_${item['itemSize']}'),
                                   cells: [
                                     DataCell(Text('')),
                                     DataCell(Text('')),
@@ -361,24 +413,26 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
                         ),
                       ),
                     ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      'Total Revenue: ₱${_totalRevenue.toStringAsFixed(2)}',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-              ],
-            );
-          } else {
-            return Center(child: CustomText(text: "No data available"));
-          }
-        },
+                  );
+                } else {
+                  return Center(child: CustomText(text: "No data available"));
+                }
+              },
+            ),
+          ),
+
+          // Total Revenue Display
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                'Total Revenue: ₱${_totalRevenue.toStringAsFixed(2)}',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -19,6 +19,7 @@ class _OverviewPageState extends State<OverviewPage> {
   Map<String, double> _collegeSalesData = {};
   Map<String, double> _seniorHighSalesData = {};
   Map<String, double> _merchSalesData = {};
+  Map<String, double> _prowareSalesData = {};
 
   String _selectedPeriod = 'Overall';
 
@@ -104,57 +105,61 @@ DateTime _getStartDate(String period) {
 }
 
 Future<void> _fetchSalesStatistics() async {
-  try {
-    Map<String, double> collegeSales = {};
-    Map<String, double> seniorHighSales = {};
-    Map<String, double> merchSales = {};
+    try {
+      Map<String, double> collegeSales = {};
+      Map<String, double> seniorHighSales = {};
+      Map<String, double> merchSales = {};
+      Map<String, double> prowareSales = {}; // For Proware & PE
 
-    DateTime startDate = _getStartDate(_selectedPeriod);
-    Timestamp firestoreStartDate = Timestamp.fromDate(startDate);
+      DateTime startDate = _getStartDate(_selectedPeriod);
+      Timestamp firestoreStartDate = Timestamp.fromDate(startDate);
 
-    QuerySnapshot adminTransactionsSnapshot;
-    if (_selectedPeriod == 'Overall') {
-      adminTransactionsSnapshot = await _firestore
-          .collection('admin_transactions')
-          .orderBy('timestamp')
-          .get();
-    } else {
-      adminTransactionsSnapshot = await _firestore
-          .collection('admin_transactions')
-          .where('timestamp', isGreaterThanOrEqualTo: firestoreStartDate)
-          .orderBy('timestamp')
-          .get();
-    }
+      QuerySnapshot adminTransactionsSnapshot;
+      if (_selectedPeriod == 'Overall') {
+        adminTransactionsSnapshot = await _firestore
+            .collection('admin_transactions')
+            .orderBy('timestamp')
+            .get();
+      } else {
+        adminTransactionsSnapshot = await _firestore
+            .collection('admin_transactions')
+            .where('timestamp', isGreaterThanOrEqualTo: firestoreStartDate)
+            .orderBy('timestamp')
+            .get();
+      }
 
-    for (var doc in adminTransactionsSnapshot.docs) {
-      var transactionData = doc.data() as Map<String, dynamic>;
+      for (var doc in adminTransactionsSnapshot.docs) {
+        var transactionData = doc.data() as Map<String, dynamic>;
 
-      if (transactionData['items'] is List) {
-        for (var item in transactionData['items']) {
-          String itemLabel = item['label'] ?? 'Unknown';
-          double quantity = (item['quantity'] ?? 0).toDouble();
-          String category = item['mainCategory'] ?? 'Unknown';
+        if (transactionData['items'] is List) {
+          for (var item in transactionData['items']) {
+            String itemLabel = item['label'] ?? 'Unknown';
+            double quantity = (item['quantity'] ?? 0).toDouble();
+            String category = item['mainCategory'] ?? 'Unknown';
 
-          if (category == 'senior high items' || category == 'senior_high_items') {
-            seniorHighSales[itemLabel] = (seniorHighSales[itemLabel] ?? 0) + quantity;
-          } else if (category == 'college_items' || category == 'senior_high_items') {
-            collegeSales[itemLabel] = (collegeSales[itemLabel] ?? 0) + quantity;
-          } else if (category == 'Merch & Accessories' || category == 'merch_and_accessories') {
-            merchSales[itemLabel] = (merchSales[itemLabel] ?? 0) + quantity;
+            if (category == 'senior high items' || category == 'senior_high_items') {
+              seniorHighSales[itemLabel] = (seniorHighSales[itemLabel] ?? 0) + quantity;
+            } else if (category == 'college_items' || category == 'college items') {
+              collegeSales[itemLabel] = (collegeSales[itemLabel] ?? 0) + quantity;
+            } else if (category == 'Merch & Accessories' || category == 'merch_and_accessories') {
+              merchSales[itemLabel] = (merchSales[itemLabel] ?? 0) + quantity;
+            } else if (category == 'Proware & PE' || category == 'proware_and_pe') { // Handle Proware & PE
+              prowareSales[itemLabel] = (prowareSales[itemLabel] ?? 0) + quantity;
+            }
           }
         }
       }
-    }
 
-    setState(() {
-      _collegeSalesData = collegeSales;
-      _seniorHighSalesData = seniorHighSales;
-      _merchSalesData = merchSales;
-    });
-  } catch (e) {
-    print("Error fetching sales statistics: $e");
+      setState(() {
+        _collegeSalesData = collegeSales;
+        _seniorHighSalesData = seniorHighSales;
+        _merchSalesData = merchSales;
+        _prowareSalesData = prowareSales; // Save the data for Proware & PE
+      });
+    } catch (e) {
+      print("Error fetching sales statistics: $e");
+    }
   }
-}
 
 Future<void> _fetchTotalRevenueAndSales() async {
   try {
@@ -215,18 +220,22 @@ Future<void> _fetchTotalRevenueAndSales() async {
             CustomText(text: "Sales Overview", size: 24, weight: FontWeight.bold),
             SizedBox(height: 20),
             Row(
-                    children: [
-                      CustomText(text: "Select Sales Period: "),
-                      _buildDropdown()
-                    ],
-                  ),
-                  SizedBox(height: 20),
-            Row(
+              children: [
+                CustomText(text: "Select Sales Period: "),
+                _buildDropdown(),
+              ],
+            ),
+            SizedBox(height: 20),
+            GridView.count(
+              shrinkWrap: true,
+              crossAxisCount: 3, // Number of columns
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 2, // Adjust the aspect ratio for the card dimensions
+              physics: NeverScrollableScrollPhysics(), // Prevents nested scrolling
               children: [
                 _buildOverviewCard(Icons.payments, 'Total Revenue', '₱${_totalRevenue.toStringAsFixed(2)}'),
-                SizedBox(width: 10),
                 _buildOverviewCard(Icons.shopping_cart, 'Total Sales', '$_totalSales'),
-                SizedBox(width: 10),
                 _buildOverviewCard(Icons.new_releases, 'Latest Sale', '$_latestSale'),
               ],
             ),
@@ -261,6 +270,15 @@ Future<void> _fetchTotalRevenueAndSales() async {
                 ],
               ),
             ),
+            SizedBox(height: 20),
+            Center(
+              child: Column(
+                children: [
+                  CustomText(text: "Proware & PE Sales", size: 20, weight: FontWeight.bold), // New Section
+                  _buildMiniChartWithLegend(_prowareSalesData), // Use Proware Data
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -268,22 +286,29 @@ Future<void> _fetchTotalRevenueAndSales() async {
   }
 
   Widget _buildOverviewCard(IconData icon, String title, String value) {
-    return Expanded(
-      child: Card(
-        elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Icon(icon, size: 40, color: Colors.blueAccent),
-              SizedBox(height: 10),
-              CustomText(text: title, size: 16),
-              SizedBox(height: 5),
-              CustomText(text: value, size: 20, weight: FontWeight.bold),
-            ],
-          ),
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(icon, size: 40, color: Colors.blueAccent),
+            SizedBox(height: 10),
+            Text(
+              title,
+              style: TextStyle(fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 5),
+            Text(
+              value,
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ),
     );
