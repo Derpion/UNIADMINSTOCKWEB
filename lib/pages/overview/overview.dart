@@ -87,7 +87,6 @@ class _OverviewPageState extends State<OverviewPage> {
         _latestSale = latestLabel;
       });
     } catch (e) {
-      print("Error fetching latest sale: $e");
     }
   }
 
@@ -100,7 +99,7 @@ DateTime _getStartDate(String period) {
   } else if (period == 'Monthly') {
     return DateTime(now.year, now.month, 1);
   } else {
-    return DateTime(1970); // Overall
+    return DateTime(1970);
   }
 }
 
@@ -109,7 +108,7 @@ Future<void> _fetchSalesStatistics() async {
       Map<String, double> collegeSales = {};
       Map<String, double> seniorHighSales = {};
       Map<String, double> merchSales = {};
-      Map<String, double> prowareSales = {}; // For Proware & PE
+      Map<String, double> prowareSales = {};
 
       DateTime startDate = _getStartDate(_selectedPeriod);
       Timestamp firestoreStartDate = Timestamp.fromDate(startDate);
@@ -143,7 +142,7 @@ Future<void> _fetchSalesStatistics() async {
               collegeSales[itemLabel] = (collegeSales[itemLabel] ?? 0) + quantity;
             } else if (category == 'Merch & Accessories' || category == 'merch_and_accessories') {
               merchSales[itemLabel] = (merchSales[itemLabel] ?? 0) + quantity;
-            } else if (category == 'Proware & PE' || category == 'proware_and_pe') { // Handle Proware & PE
+            } else if (category == 'Proware & PE' || category == 'proware_and_pe') {
               prowareSales[itemLabel] = (prowareSales[itemLabel] ?? 0) + quantity;
             }
           }
@@ -154,10 +153,9 @@ Future<void> _fetchSalesStatistics() async {
         _collegeSalesData = collegeSales;
         _seniorHighSalesData = seniorHighSales;
         _merchSalesData = merchSales;
-        _prowareSalesData = prowareSales; // Save the data for Proware & PE
+        _prowareSalesData = prowareSales;
       });
     } catch (e) {
-      print("Error fetching sales statistics: $e");
     }
   }
 
@@ -191,7 +189,6 @@ Future<void> _fetchTotalRevenueAndSales() async {
       _totalSales = totalSales;
     });
   } catch (e) {
-    print("Error fetching total revenue and sales: $e");
   }
 }
 
@@ -228,11 +225,11 @@ Future<void> _fetchTotalRevenueAndSales() async {
             SizedBox(height: 20),
             GridView.count(
               shrinkWrap: true,
-              crossAxisCount: 3, // Number of columns
+              crossAxisCount: 3,
               crossAxisSpacing: 10,
               mainAxisSpacing: 10,
-              childAspectRatio: 2, // Adjust the aspect ratio for the card dimensions
-              physics: NeverScrollableScrollPhysics(), // Prevents nested scrolling
+              childAspectRatio: 2,
+              physics: NeverScrollableScrollPhysics(),
               children: [
                 _buildOverviewCard(Icons.payments, 'Total Revenue', '₱${_totalRevenue.toStringAsFixed(2)}'),
                 _buildOverviewCard(Icons.shopping_cart, 'Total Sales', '$_totalSales'),
@@ -274,8 +271,8 @@ Future<void> _fetchTotalRevenueAndSales() async {
             Center(
               child: Column(
                 children: [
-                  CustomText(text: "Proware & PE Sales", size: 20, weight: FontWeight.bold), // New Section
-                  _buildMiniChartWithLegend(_prowareSalesData), // Use Proware Data
+                  CustomText(text: "Proware & PE Sales", size: 20, weight: FontWeight.bold),
+                  _buildMiniChartWithLegend(_prowareSalesData),
                 ],
               ),
             ),
@@ -324,7 +321,7 @@ Future<void> _fetchTotalRevenueAndSales() async {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Flexible(
-            flex: 2, // Adjust the flex value if needed
+            flex: 2,
             child: SizedBox(
               height: 350,
               child: PieChart(
@@ -345,7 +342,7 @@ Future<void> _fetchTotalRevenueAndSales() async {
           ),
           SizedBox(width: 20),
           Flexible(
-            flex: 1, // Adjust the flex value to balance the layout
+            flex: 1,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,

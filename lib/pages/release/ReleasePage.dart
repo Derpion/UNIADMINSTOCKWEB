@@ -238,7 +238,6 @@ class _ReleasePageState extends State<ReleasePage> {
 
       category = category.trim();
 
-      // Route-based logic for different categories
       if (category == 'Merch & Accessories') {
         await _deductFromMerchAndAccessories(label, size, quantity);
       } else if (category == 'Proware & PE') {

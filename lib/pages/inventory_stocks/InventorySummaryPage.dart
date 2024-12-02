@@ -17,11 +17,17 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
   Map<String, Map<String, dynamic>> _merchStock = {};
   Map<String, Map<String, dynamic>> _prowareStock = {};
   Map<String, Map<String, Map<String, int>>> _soldData = {};
-
+  Map<String, Map<String, dynamic>> _filteredSeniorHighStock = {};
+  Map<String, Map<String, dynamic>> _filteredCollegeStock = {};
+  Map<String, Map<String, dynamic>> _filteredMerchStock = {};
+  Map<String, Map<String, dynamic>> _filteredProwareStock = {};
+  TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
   bool _loading = true;
 
   @override
   void initState() {
+    _searchController.addListener(_filterInventory);
     super.initState();
     _fetchInventoryData();
   }
@@ -40,13 +46,15 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
         _fetchSoldData(),
       ]);
 
-      debugSoldData();
-
       setState(() {
+        _filteredSeniorHighStock = _seniorHighStock;
+        _filteredCollegeStock = _collegeStock;
+        _filteredMerchStock = _merchStock;
+        _filteredProwareStock = _prowareStock;
+
         _loading = false;
       });
     } catch (e) {
-      print("Error fetching inventory data: $e");
       setState(() {
         _loading = false;
       });
@@ -54,9 +62,7 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
   }
 
   void debugSoldData() {
-    print("Sold Data Keys: ${_soldData.keys.toList()}");
     _soldData.forEach((key, value) {
-      print("Category: $key, Data: $value");
     });
   }
 
@@ -75,8 +81,6 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
               String label = (item['label'] ?? '').toLowerCase().trim();
               String size = (item['itemSize'] ?? '').toLowerCase().trim();
               int quantity = item['quantity'] ?? 0;
-
-              // Ensure the mapping is consistent
               newSoldData.putIfAbsent(category, () => {});
               newSoldData[category]!.putIfAbsent(label, () => {});
               newSoldData[category]![label]!.update(size, (value) => value + quantity, ifAbsent: () => quantity);
@@ -89,7 +93,6 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
         _soldData = newSoldData;
       });
     } catch (e) {
-      print('Error fetching sold data: $e');
     }
   }
 
@@ -128,7 +131,6 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
         _seniorHighStock = data;
       });
     } catch (e) {
-      print("Error fetching senior high stock: $e");
     }
   }
 
@@ -173,7 +175,6 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
         _collegeStock = data;
       });
     } catch (e) {
-      print("Error fetching college stock: $e");
     }
   }
 
@@ -213,7 +214,6 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
         _merchStock = data;
       });
     } catch (e) {
-      print("Error fetching merch stock: $e");
     }
   }
 
@@ -249,19 +249,17 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
           subcategoryItems[doc.id] = {
             'label': docData['label'] ?? doc.id,
             'stock': stockData,
-            'subcategory': subcategory, // Store subcategory information
+            'subcategory': subcategory,
           };
         }
 
         prowareData[subcategory] = subcategoryItems;
       }
 
-      // Update state with fetched Proware & PE data
       setState(() {
         _prowareStock = prowareData;
       });
     } catch (e) {
-      print("Error fetching Proware & PE stock: $e");
     }
   }
 
@@ -295,7 +293,6 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
       );
     }
 
-    // Handle College category
     if (category == 'College') {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -377,13 +374,11 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
             hint: Text('Select Subcategory'),
             onChanged: (value) {
               setState(() {
-                _selectedSubcategory = value; // Update selected subcategory
+                _selectedSubcategory = value;
               });
 
-              // Debugging for dynamic matching
-              print('Selected Subcategory: $_selectedSubcategory');
+
               final subcategorySoldData = _extractSoldDataForSubcategory(value, _soldData['proware & pe'] ?? {});
-              print('Sold Data for Subcategory: $subcategorySoldData');
             },
             items: subcategories.map((subcategory) {
               return DropdownMenuItem<String>(
@@ -452,14 +447,11 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
     );
   }
 
-  Map<String, Map<String, int>> _extractSoldDataForSubcategory(
-      String? subcategory, Map<String, Map<String, int>> soldData) {
+  Map<String, Map<String, int>> _extractSoldDataForSubcategory(String? subcategory, Map<String, Map<String, int>> soldData) {
     if (subcategory == null) return {};
 
-    // Normalize subcategory name
     final normalizedSubcategory = normalizeKey(subcategory);
 
-    // Filter sold data for items that belong to the selected subcategory
     final filteredSoldData = <String, Map<String, int>>{};
     soldData.forEach((soldKey, soldSizes) {
       if (normalizeKey(soldKey).contains(normalizedSubcategory)) {
@@ -469,7 +461,6 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
 
     return filteredSoldData;
   }
-
 
   String normalizeKey(String key) => key.toLowerCase().trim();
 
@@ -487,7 +478,6 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
       final stock = item['stock'] as Map<String, dynamic>? ?? {};
       final normalizedLabel = normalizeKey(label);
 
-      // Match sold data for the current item
       final soldItems = soldData[normalizedLabel] ?? {};
 
       return Column(
@@ -506,7 +496,7 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
               ],
               rows: stock.keys.map((sizeKey) {
                 final size = stock[sizeKey];
-                final soldQuantity = soldItems[sizeKey.toLowerCase()] ?? 0; // Match size keys
+                final soldQuantity = soldItems[sizeKey.toLowerCase()] ?? 0;
                 return DataRow(cells: [
                   DataCell(Center(child: Text(sizeKey))),
                   DataCell(Center(child: Text('${size['quantity']}'))),
@@ -543,8 +533,6 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
       }
 
       final categoryWidgets = <pw.Widget>[];
-
-      // Add category title
       categoryWidgets.add(
         pw.Text(
           categoryTitle,
@@ -552,31 +540,23 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
         ),
       );
 
-      // Handle Proware & PE separately for subcategories
-      if (categoryTitle == "Proware & PE Summary") {
-        stockData.forEach((subcategory, subcategoryData) {
+      if (categoryTitle == "College Summary") {
+        stockData.forEach((courseLabel, courseItems) {
           categoryWidgets.add(
             pw.Padding(
               padding: const pw.EdgeInsets.only(top: 12),
               child: pw.Text(
-                subcategory,
+                courseLabel,
                 style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
               ),
             ),
           );
 
-          subcategoryData.forEach((itemKey, item) {
+          courseItems.forEach((itemKey, item) {
             final label = item['label'] ?? itemKey;
             final stock = item['stock'] as Map<String, dynamic>? ?? {};
-            final normalizedLabel = normalizeKey(label);
+            final normalizedLabel = label.toString().toLowerCase().trim();
             Map<String, int> soldItems = categorySoldData[normalizedLabel] ?? {};
-
-            if (soldItems.isEmpty) {
-              soldItems = categorySoldData.entries.firstWhere(
-                    (entry) => normalizeKey(entry.key) == normalizedLabel,
-                orElse: () => MapEntry("", {}),
-              ).value;
-            }
 
             categoryWidgets.add(
               pw.Padding(
@@ -610,20 +590,66 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
             );
           });
         });
-      } else {
-        // Handle other categories (e.g., Senior High, College, Merch & Accessories)
+      }
+
+      if (categoryTitle == "Proware & PE Summary") {
+        stockData.forEach((subcategory, subcategoryItems) {
+          categoryWidgets.add(
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(top: 12),
+              child: pw.Text(
+                subcategory,
+                style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+              ),
+            ),
+          );
+
+          subcategoryItems.forEach((itemKey, item) {
+            final label = item['label'] ?? itemKey;
+            final stock = item['stock'] as Map<String, dynamic>? ?? {};
+            final normalizedLabel = normalizeKey(label);
+            Map<String, int> soldItems = categorySoldData[normalizedLabel] ?? {};
+
+            categoryWidgets.add(
+              pw.Padding(
+                padding: const pw.EdgeInsets.only(top: 8),
+                child: pw.Text(
+                  label,
+                  style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+                ),
+              ),
+            );
+
+            categoryWidgets.add(
+              pw.Table.fromTextArray(
+                headers: ['Size', 'Quantity On Hand', 'Quantity Sold', 'Price'],
+                data: stock.keys.map((sizeKey) {
+                  final size = stock[sizeKey];
+                  final normalizedSize = sizeKey.toLowerCase();
+                  final soldQuantity = soldItems[normalizedSize] ?? 0;
+                  return [
+                    sizeKey,
+                    size['quantity'].toString(),
+                    soldQuantity.toString(),
+                    '₱${size['price'].toStringAsFixed(2)}',
+                  ];
+                }).toList(),
+                border: pw.TableBorder.all(),
+                cellAlignment: pw.Alignment.centerLeft,
+                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                cellStyle: pw.TextStyle(fontSize: 10),
+              ),
+            );
+          });
+        });
+      }
+
+      else {
         stockData.forEach((itemKey, item) {
           final label = item['label'] ?? itemKey;
           final stock = item['stock'] as Map<String, dynamic>? ?? {};
           final normalizedLabel = label.toString().toLowerCase().trim();
           Map<String, int> soldItems = categorySoldData[normalizedLabel] ?? {};
-
-          if (soldItems.isEmpty) {
-            soldItems = categorySoldData.entries.firstWhere(
-                  (entry) => entry.key.toLowerCase().trim() == normalizedLabel,
-              orElse: () => MapEntry("", {}),
-            ).value;
-          }
 
           categoryWidgets.add(
             pw.Padding(
@@ -657,14 +683,9 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
           );
         });
       }
-
-      // Add the page to the PDF
       pdf.addPage(
         pw.MultiPage(
-          pageFormat: PdfPageFormat.a4.copyWith(
-            width: PdfPageFormat.a4.width,
-            height: PdfPageFormat.a4.height,
-          ),
+          pageFormat: PdfPageFormat.a4,
           build: (context) => [
             pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -675,10 +696,50 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
       );
     }
 
-    // Save and display the PDF
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => pdf.save(),
     );
+  }
+
+  void _filterInventory() {
+    setState(() {
+      _searchQuery = _searchController.text.toLowerCase().trim();
+
+      _filteredSeniorHighStock = _filterByQuery(_seniorHighStock);
+      _filteredCollegeStock = _filterByQuery(_collegeStock, nested: true);
+      _filteredMerchStock = _filterByQuery(_merchStock);
+      _filteredProwareStock = _filterByQuery(_prowareStock, nested: true);
+    });
+  }
+
+  Map<String, Map<String, dynamic>> _filterByQuery(
+      Map<String, Map<String, dynamic>> stockData, {
+        bool nested = false,
+      }) {
+    if (_searchQuery.isEmpty) {
+      return stockData;
+    }
+
+    Map<String, Map<String, dynamic>> filtered = {};
+    stockData.forEach((key, value) {
+      if (nested) {
+        Map<String, dynamic> nestedItems = {};
+        value.forEach((itemKey, itemValue) {
+          if ((itemValue['label'] ?? '').toString().toLowerCase().contains(_searchQuery)) {
+            nestedItems[itemKey] = itemValue;
+          }
+        });
+        if (nestedItems.isNotEmpty) {
+          filtered[key] = nestedItems;
+        }
+      } else {
+        if ((value['label'] ?? '').toString().toLowerCase().contains(_searchQuery)) {
+          filtered[key] = value;
+        }
+      }
+    });
+
+    return filtered;
   }
 
   @override
@@ -694,6 +755,7 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
         ),
       );
     }
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Inventory Summary'),
@@ -705,17 +767,36 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildStockSummary('Senior High', _seniorHighStock),
-            _buildStockSummary('College', _collegeStock),
-            _buildStockSummary('Merch & Accessories', _merchStock),
-            _buildStockSummary('Proware & PE', _prowareStock),
-          ],
-        ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search by label...',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildStockSummary('Senior High', _filteredSeniorHighStock),
+                  _buildStockSummary('College', _filteredCollegeStock),
+                  _buildStockSummary('Merch & Accessories', _filteredMerchStock),
+                  _buildStockSummary('Proware & PE', _filteredProwareStock),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

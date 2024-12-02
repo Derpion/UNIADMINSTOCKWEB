@@ -16,19 +16,19 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
   final ScrollController _verticalController = ScrollController();
   final ScrollController _horizontalController = ScrollController();
 
-  final TextEditingController _searchController = TextEditingController(); // Search Controller
-  List<Map<String, dynamic>> _filteredSalesData = []; // Filtered Sales Data
+  final TextEditingController _searchController = TextEditingController();
+  List<Map<String, dynamic>> _filteredSalesData = [];
 
   Set<String> expandedBulkOrders = Set<String>();
   Future<List<Map<String, dynamic>>>? _salesDataFuture;
-  List<Map<String, dynamic>> _allSalesItems = []; // All Sales Items
+  List<Map<String, dynamic>> _allSalesItems = [];
   double _totalRevenue = 0.0;
 
   @override
   void initState() {
     super.initState();
     _salesDataFuture = _fetchSalesData();
-    _searchController.addListener(_filterSalesData); // Add listener to search input
+    _searchController.addListener(_filterSalesData);
   }
 
   @override
@@ -75,7 +75,7 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
     setState(() {
       _totalRevenue = totalRevenue;
       _allSalesItems = allSalesItems;
-      _filteredSalesData = List.from(allSalesItems); // Initialize filtered data
+      _filteredSalesData = List.from(allSalesItems);
     });
 
     return allSalesItems;
@@ -85,15 +85,13 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
     String query = _searchController.text.toLowerCase();
     setState(() {
       if (query.isEmpty) {
-        _filteredSalesData = List.from(_allSalesItems); // Reset to all data
+        _filteredSalesData = List.from(_allSalesItems);
       } else {
         _filteredSalesData = _allSalesItems.where((sale) {
           if (sale['isBulk'] == true) {
-            // Check each item in bulk orders
             return (sale['items'] as List).any((item) =>
                 (item['label'] ?? '').toString().toLowerCase().contains(query));
           } else {
-            // Check single orders
             return (sale['items'][0]['label'] ?? '')
                 .toString()
                 .toLowerCase()
@@ -106,147 +104,66 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
 
   Future<void> _generatePDF(List<Map<String, dynamic>> salesData) async {
     final pdf = pw.Document();
-    const int rowsPerPage = 10; // 10 data rows + 1 header row
+    const int rowsPerPage = 10;
     final String currentDateTime = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
-
     int pageCount = (salesData.length / rowsPerPage).ceil();
+
     for (int page = 0; page < pageCount; page++) {
       final rowsChunk = salesData.skip(page * rowsPerPage).take(rowsPerPage).toList();
 
+      for (var row in rowsChunk) {
+      }
+
       pdf.addPage(
         pw.Page(
-          pageFormat: PdfPageFormat.a4.copyWith(
-            width: PdfPageFormat.a4.height,
-            height: PdfPageFormat.a4.width,
-          ),
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(16),
           build: (pw.Context context) {
             return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text('Generated on: $currentDateTime', style: pw.TextStyle(fontSize: 12, fontStyle: pw.FontStyle.italic),),
-                pw.Text('Sales Report (Page ${page + 1} of $pageCount)', style: pw.TextStyle(fontSize: 20)),
-                pw.SizedBox(height: 4),
+                pw.Text('Generated on: $currentDateTime',
+                    style: pw.TextStyle(fontSize: 12, fontStyle: pw.FontStyle.italic)),
+                pw.Text('Sales Report (Page ${page + 1} of $pageCount)',
+                    style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                pw.SizedBox(height: 8),
+                pw.Divider(),
                 pw.Table(
-                  border: pw.TableBorder.all(color: PdfColors.black, width: 1),
+                  border: pw.TableBorder.all(width: 0.5),
                   columnWidths: {
-                    for (int i = 0; i < 7; i++)
-                      i: const pw.FixedColumnWidth(
-                          80),
+                    0: const pw.FlexColumnWidth(2),
+                    1: const pw.FlexColumnWidth(3),
+                    2: const pw.FlexColumnWidth(2),
+                    3: const pw.FlexColumnWidth(4),
+                    4: const pw.FlexColumnWidth(2),
+                    5: const pw.FlexColumnWidth(1),
+                    6: const pw.FlexColumnWidth(2),
+                    7: const pw.FlexColumnWidth(2),
                   },
                   children: [
-                    // Header row
                     pw.TableRow(
                       children: [
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('OR Number', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('Student Name', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('Student ID', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('Item Label', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('Item Size', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('Quantity', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('Category', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('Total Price', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                        ),
+                        pw.Text('OR Number', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                        pw.Text('Student Name', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                        pw.Text('Student ID', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                        pw.Text('Item Label', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                        pw.Text('Item Size', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                        pw.Text('Qty', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                        pw.Text('Category', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                        pw.Text('Total Price', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                       ],
                     ),
-                    // Data rows with aggregation for bulk orders
-                    ...rowsChunk.map((saleItem) {
-                      if (saleItem['items'] != null &&
-                          saleItem['items'] is List &&
-                          (saleItem['items'] as List).length > 1) {
-                        // For bulk orders with more than one item
-                        List<pw.TableRow> bulkRows = [
-                          // Bulk order summary row
-                          pw.TableRow(
-                            children: [
-                              pw.Text(saleItem['orNumber'] ?? 'N/A'),
-                              pw.Text(saleItem['userName'] ?? 'N/A'),
-                              pw.Text(saleItem['studentNumber'] ?? 'N/A'),
-                              pw.Text('Bulk Order (${saleItem['items'].length} items)'),
-                              pw.Text(''),
-                              pw.Text(''),
-                              pw.Text(''),
-                              pw.Text('₱${(saleItem['totalTransactionPrice'] ?? 0.0).toStringAsFixed(2)}'),
-                            ],
-                          ),
-                        ];
-
-                        // Individual rows for each item in the bulk order
-                        bulkRows.addAll((saleItem['items'] as List).map<pw.TableRow>((item) {
-                          return pw.TableRow(
-                            children: [
-                              pw.Text(''),
-                              pw.Text(''),
-                              pw.Text(''),
-                              pw.Text(item['label'] ?? 'N/A'),
-                              pw.Text(item['itemSize'] ?? 'N/A'),
-                              pw.Text(item['quantity'].toString()),
-                              pw.Text(item['mainCategory'] ?? 'N/A'),
-                              pw.Text('₱${(item['totalPrice'] ?? 0.0).toStringAsFixed(2)}'),
-                            ],
-                          );
-                        }).toList());
-
-                        return bulkRows;
-                      } else {
-                        // For single orders or bulk orders with only one item
-                        return [
-                          pw.TableRow(
-                            children: [
-                              pw.Text(saleItem['orNumber'] ?? 'N/A'),
-                              pw.Text(saleItem['userName'] ?? 'N/A'),
-                              pw.Text(saleItem['studentNumber'] ?? 'N/A'),
-                              pw.Text(saleItem['items'] != null && saleItem['items'] is List && saleItem['items'].length == 1
-                                  ? saleItem['items'][0]['label'] ?? 'N/A'
-                                  : saleItem['itemLabel'] ?? 'N/A'),
-                              pw.Text(saleItem['items'] != null && saleItem['items'] is List && saleItem['items'].length == 1
-                                  ? saleItem['items'][0]['itemSize'] ?? 'N/A'
-                                  : saleItem['itemSize'] ?? 'N/A'),
-                              pw.Text(saleItem['items'] != null && saleItem['items'] is List && saleItem['items'].length == 1
-                                  ? saleItem['items'][0]['quantity'].toString()
-                                  : saleItem['quantity'].toString()),
-                              pw.Text(saleItem['items'] != null && saleItem['items'] is List && saleItem['items'].length == 1
-                                  ? saleItem['items'][0]['mainCategory'] ?? 'N/A'
-                                  : saleItem['category'] ?? 'N/A'),
-                              pw.Text(saleItem['items'] != null && saleItem['items'] is List && saleItem['items'].length == 1
-                                  ? '₱${(saleItem['items'][0]['totalPrice'] ?? 0.0).toStringAsFixed(2)}'
-                                  : '₱${(saleItem['totalPrice'] ?? 0.0).toStringAsFixed(2)}'),
-                            ],
-                          ),
-                        ];
-                      }
-                    }).expand((rows) => rows),
+                    ..._buildTableRows(rowsChunk),
                   ],
                 ),
-                if (page == pageCount - 1) // Add total revenue on the last page
+                if (page == pageCount - 1)
                   pw.Padding(
                     padding: const pw.EdgeInsets.only(top: 16),
                     child: pw.Align(
                       alignment: pw.Alignment.centerRight,
                       child: pw.Text(
                         'Total Revenue: ₱${_totalRevenue.toStringAsFixed(2)}',
-                        style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+                        style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
                       ),
                     ),
                   ),
@@ -257,10 +174,78 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
       );
     }
 
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
-    );
+    await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
   }
+
+  List<pw.TableRow> _buildTableRows(List<Map<String, dynamic>> rowsChunk) {
+    List<pw.TableRow> tableRows = [];
+
+    for (var saleItem in rowsChunk) {
+      if (saleItem['isBulk'] == true && saleItem['items'] != null) {
+        tableRows.add(
+          pw.TableRow(
+            children: [
+              pw.Text(saleItem['orNumber'] ?? 'N/A'),
+              pw.Text(saleItem['userName'] ?? 'N/A'),
+              pw.Text(saleItem['studentNumber'] ?? 'N/A'),
+              pw.Text('Bulk Order (${saleItem['items'].length} items)', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+              pw.Text(''),
+              pw.Text(''),
+              pw.Text(''),
+              pw.Text('₱${(saleItem['totalTransactionPrice'] ?? 0.0).toStringAsFixed(2)}'),
+            ],
+          ),
+        );
+
+        for (var item in saleItem['items']) {
+          tableRows.add(
+            pw.TableRow(
+              children: [
+                pw.Text(''),
+                pw.Text(''),
+                pw.Text(''),
+                pw.Text(item['label'] ?? 'N/A'),
+                pw.Text(item['itemSize'] ?? 'N/A'),
+                pw.Text('${item['quantity'] ?? 0}'),
+                pw.Text(item['mainCategory'] ?? 'N/A'),
+                pw.Text('₱${(item['totalPrice'] ?? 0.0).toStringAsFixed(2)}'),
+              ],
+            ),
+          );
+        }
+      } else {
+        tableRows.add(
+          pw.TableRow(
+            children: [
+              pw.Text(saleItem['orNumber'] ?? 'N/A'),
+              pw.Text(saleItem['userName'] ?? 'N/A'),
+              pw.Text(saleItem['studentNumber'] ?? 'N/A'),
+              pw.Text(
+                  saleItem['items'] != null && saleItem['items'].isNotEmpty
+                      ? saleItem['items'][0]['label']
+                      : 'N/A'),
+              pw.Text(
+                  saleItem['items'] != null && saleItem['items'].isNotEmpty
+                      ? saleItem['items'][0]['itemSize']
+                      : 'N/A'),
+              pw.Text(
+                  saleItem['items'] != null && saleItem['items'].isNotEmpty
+                      ? '${saleItem['items'][0]['quantity']}'
+                      : '0'),
+              pw.Text(
+                  saleItem['items'] != null && saleItem['items'].isNotEmpty
+                      ? saleItem['items'][0]['mainCategory']
+                      : 'N/A'),
+              pw.Text('₱${(saleItem['totalTransactionPrice'] ?? 0.0).toStringAsFixed(2)}'),
+            ],
+          ),
+        );
+      }
+    }
+
+    return tableRows;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -283,7 +268,6 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
               if (allSalesItems != null && allSalesItems.isNotEmpty) {
                 await _generatePDF(allSalesItems);
               } else {
-                print("No sales data to display in PDF");
               }
             },
           ),
@@ -291,7 +275,6 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
       ),
       body: Column(
         children: [
-          // Add Search Bar
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: TextField(
@@ -304,7 +287,6 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
             ),
           ),
 
-          // Sales Data Table
           Expanded(
             child: FutureBuilder<List<Map<String, dynamic>>>(
               future: _salesDataFuture,
@@ -342,8 +324,6 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
                             bool isBulkOrder = sale['isBulk'];
                             bool isExpanded = expandedBulkOrders.contains(sale['orNumber']);
                             List<DataRow> rows = [];
-
-                            // Main row for each transaction
                             rows.add(
                               DataRow(
                                 key: ValueKey('${sale['orNumber']}_main'),
@@ -388,8 +368,6 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
                                 ],
                               ),
                             );
-
-                            // Expanded rows for bulk orders
                             if (isExpanded) {
                               rows.addAll((sale['items'] as List).map<DataRow>((item) {
                                 return DataRow(
@@ -421,7 +399,6 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
             ),
           ),
 
-          // Total Revenue Display
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Align(
