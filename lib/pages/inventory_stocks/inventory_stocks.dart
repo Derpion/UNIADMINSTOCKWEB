@@ -416,16 +416,19 @@ class _InventoryPageState extends State<InventoryPage> {
   }
 
   void _updateQuantity(String itemKey, String size, int change, String collectionType, [String? subcategory]) {
-
     if (collectionType == 'Proware & PE' && subcategory == null) {
       return;
     }
 
-    DocumentReference docRef;
+    // Declare docRef only once at the top
+    late DocumentReference docRef;
+
+    // Define the update data (common for all types)
     Map<String, dynamic> updateData = {
       'sizes.$size.quantity': FieldValue.increment(change),
     };
 
+    // Initialize docRef based on collectionType
     if (collectionType == 'senior_high_items') {
       docRef = firestore
           .collection('Inventory_stock')
@@ -451,14 +454,22 @@ class _InventoryPageState extends State<InventoryPage> {
     } else if (collectionType == 'Merch & Accessories') {
       docRef = firestore
           .collection('Inventory_stock')
-          .doc('Merch & Accessories')
-          .collection('Items')
-          .doc(itemKey);
+          .doc('Merch & Accessories');
 
-      setState(() {
-        int currentQuantity = _merchStockQuantities[itemKey]?['stock'][size]['quantity'] ?? 0;
-        _merchStockQuantities[itemKey]?['stock'][size]['quantity'] = currentQuantity + change;
+      // Define and perform the update
+      docRef.update({
+        '${itemKey}.sizes.${size}.quantity': FieldValue.increment(change),
+      }).then((_) {
+        setState(() {
+          int currentQuantity = _merchStockQuantities[itemKey]?['stock'][size]['quantity'] ?? 0;
+          _merchStockQuantities[itemKey]?['stock'][size]['quantity'] = currentQuantity + change;
+        });
+      }).catchError((error) {
+        print("Failed to update quantity: $error");
       });
+
+      // Exit early since update is performed here
+      return;
     } else if (collectionType == 'Proware & PE') {
       docRef = firestore
           .collection('Inventory_stock')
@@ -474,8 +485,9 @@ class _InventoryPageState extends State<InventoryPage> {
       return;
     }
 
-    docRef.update(updateData).then((_) {
-    }).catchError((error) {
+    // Perform the update for other collection types
+    docRef.update(updateData).catchError((error) {
+      print("Failed to update quantity: $error");
     });
   }
 
