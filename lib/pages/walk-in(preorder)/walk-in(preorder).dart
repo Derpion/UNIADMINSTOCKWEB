@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class WalkinPagePreOrder extends StatefulWidget {
   @override
@@ -680,35 +677,6 @@ class _MainWalkInPreOrderPageState extends State<WalkinPagePreOrder> {
     );
   }
 
-  Future<void> _sendSMSToUser(String contactNumber, String studentName, String studentNumber, double totalAmount, List<Map<String, dynamic>> cartItems) async {
-    try {
-      String message = "Hello $studentName (Student ID: $studentNumber), your order has been placed successfully. Total amount: ₱$totalAmount. Items: ";
-
-      for (var item in cartItems) {
-        message += "${item['itemLabel']} (x${item['quantity']}), ";
-      }
-      message = message.trimRight().replaceAll(RegExp(r',\s*$'), '');
-
-      final response = await http.post(
-        Uri.parse('http://localhost:3000/send-sms'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'apikey': dotenv.env['APIKEY'] ?? '',
-          'number': contactNumber,
-          'message': message,
-          'sendername': dotenv.env['SENDERNAME'] ?? 'Unistock',
-        }),
-      );
-
-      if (response.statusCode == 200) {
-      } else {
-      }
-    } catch (e) {
-    }
-  }
-
   Future<void> _submitOrder() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -783,9 +751,6 @@ class _MainWalkInPreOrderPageState extends State<WalkinPagePreOrder> {
           .doc(userId)
           .collection('preorders')
           .add(preOrderData);
-
-
-      await _sendSMSToUser(contactNumber, studentName, studentNumber, 0.0, cartItems);
 
       Get.snackbar('Success', 'Order submitted and saved successfully!');
       _refreshData();
