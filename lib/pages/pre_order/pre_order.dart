@@ -132,12 +132,12 @@ class _PreOrderPageState extends State<PreOrderPage> {
 
   Future<void> _approvePreOrder(Map<String, dynamic> preOrder) async {
     try {
-
-
       String userId = preOrder['userId'] ?? '';
       String orderId = preOrder['orderId'] ?? '';
       String userName = preOrder['userName'] ?? 'Unknown User';
       String studentId = preOrder['studentId'] ?? 'Unknown ID';
+
+      print('Processing pre-order for userId: $userId, orderId: $orderId');
 
       DateTime preOrderDate;
       if (preOrder['preOrderDate'] is Timestamp) {
@@ -161,6 +161,8 @@ class _PreOrderPageState extends State<PreOrderPage> {
       String studentName = userDoc['name'] ?? 'Unknown Name';
       String studentNumber = userDoc['studentId'] ?? 'Unknown ID';
 
+      print('Retrieved user contact number: $contactNumber');
+
       DocumentSnapshot orderDoc = await _firestore
           .collection('users')
           .doc(userId)
@@ -182,6 +184,8 @@ class _PreOrderPageState extends State<PreOrderPage> {
         throw Exception('No items found in the pre-order');
       }
 
+      print('Processing order items: ${orderItems.length} items');
+
       List<Map<String, dynamic>> approvedItems = [];
 
       for (var item in orderItems) {
@@ -193,6 +197,8 @@ class _PreOrderPageState extends State<PreOrderPage> {
         String courseLabel = item['courseLabel'] ?? 'Unknown CourseLabel';
         String size = item['itemSize'] ?? 'Unknown Size';
         int quantity = item['quantity'] ?? 0;
+
+        print('Validating item: $label, category: $category, size: $size, quantity: $quantity');
 
         double pricePerPiece = await _fetchPricePerPiece(category, label, size, courseLabel: courseLabel);
 
@@ -217,6 +223,8 @@ class _PreOrderPageState extends State<PreOrderPage> {
         totalOrderPrice += pricePerPiece * quantity;
       }
 
+      print('Total order price calculated: $totalOrderPrice');
+
       await _firestore.collection('approved_preorders').doc(orderId).set({
         'userId': userId,
         'orderId': orderId,
@@ -230,11 +238,115 @@ class _PreOrderPageState extends State<PreOrderPage> {
 
       await _firestore.collection('users').doc(userId).collection('preorders').doc(orderId).delete();
 
+      print('Pre-order approved and moved to approved_preorders collection.');
+
       await _sendSMSToUser(contactNumber, studentName, studentNumber, totalOrderPrice, approvedItems);
       await _sendNotificationToUser(userId, userName, approvedItems);
       await _fetchAllPendingPreOrders();
 
+      print('Notifications sent and pending pre-orders fetched.');
+
     } catch (e) {
+      print('Error in _approvePreOrder: $e');
+    }
+  }
+
+  Future<double> _fetchPricePerPiece(String category, String label, String size, {String? courseLabel}) async {
+    try {
+      final normalizedCategory = category.toLowerCase().trim();
+      final normalizedLabel = label.toLowerCase().trim();
+
+      if (normalizedCategory == 'merch_and_accessories') {
+        final categoryDoc = await _firestore.collection('Inventory_stock').doc('Merch & Accessories').get();
+        if (categoryDoc.exists) {
+          final data = categoryDoc.data() as Map<String, dynamic>;
+          if (data.containsKey(label)) {
+            final itemData = data[label] as Map<String, dynamic>;
+            if (itemData.containsKey('sizes')) {
+              final sizes = itemData['sizes'] as Map<String, dynamic>;
+              if (sizes.containsKey(size)) {
+                return sizes[size]['price']?.toDouble() ?? 0.0;
+              }
+            }
+            return itemData['price']?.toDouble() ?? 0.0;
+          }
+        }
+        throw Exception('Item not found in Merch & Accessories: $label');
+      } else if (normalizedCategory == 'college_items') {
+        if (courseLabel == null || courseLabel.isEmpty) {
+          throw Exception('Missing courseLabel for college_items.');
+        }
+
+        final categoryDoc = await _firestore
+            .collection('Inventory_stock')
+            .doc('college_items')
+            .collection(courseLabel)
+            .where('label', isEqualTo: label)
+            .limit(1)
+            .get();
+
+        if (categoryDoc.docs.isNotEmpty) {
+          final itemData = categoryDoc.docs.first.data() as Map<String, dynamic>;
+          if (itemData.containsKey('sizes')) {
+            final sizes = itemData['sizes'] as Map<String, dynamic>;
+            if (sizes.containsKey(size)) {
+              return sizes[size]['price']?.toDouble() ?? 0.0;
+            }
+          }
+          return itemData['price']?.toDouble() ?? 0.0;
+        }
+        throw Exception('Item document not found for label: $label in courseLabel: $courseLabel under category: $category.');
+      } else if (normalizedCategory == 'senior_high_items') {
+        final categoryDoc = await _firestore
+            .collection('Inventory_stock')
+            .doc('senior_high_items')
+            .collection('Items')
+            .doc(label)
+            .get();
+        if (categoryDoc.exists) {
+          final data = categoryDoc.data() as Map<String, dynamic>;
+          if (data.containsKey('sizes')) {
+            final sizes = data['sizes'] as Map<String, dynamic>;
+            if (sizes.containsKey(size)) {
+              return sizes[size]['price']?.toDouble() ?? 0.0;
+            }
+          }
+          return data['price']?.toDouble() ?? 0.0;
+        }
+        throw Exception('Item not found in Senior High Items: $label');
+      } else if (normalizedCategory == 'proware_and_pe' || category.trim() == 'Proware & PE') {
+        if (courseLabel == null || courseLabel.isEmpty) {
+          throw Exception('Missing courseLabel for Proware & PE.');
+        }
+
+        final categoryDoc = await _firestore
+            .collection('Inventory_stock')
+            .doc('Proware & PE')
+            .collection(courseLabel)
+            .doc(label)
+            .get();
+
+        if (categoryDoc.exists) {
+          final data = categoryDoc.data() as Map<String, dynamic>;
+
+          // Check if sizes exist and retrieve the price for the specified size
+          if (data.containsKey('sizes')) {
+            final sizes = data['sizes'] as Map<String, dynamic>;
+            if (sizes.containsKey(size)) {
+              return sizes[size]['price']?.toDouble() ?? 0.0;
+            } else {
+              throw Exception("Size $size not found for $label in Proware & PE under $courseLabel.");
+            }
+          }
+          return data['price']?.toDouble() ?? 0.0;
+        }
+
+        throw Exception('Item not found in Proware & PE: $label under $courseLabel.');
+      }
+
+      throw Exception('Unknown category: $category');
+    } catch (e) {
+      throw Exception('Failed to fetch pricePerPiece for $label in category $category.');
     }
   }
 
@@ -310,7 +422,7 @@ class _PreOrderPageState extends State<PreOrderPage> {
             .collection('Items')
             .doc(label)
             .get();
-      } else if (normalizedCategory == 'proware & pe') {
+      } else if (normalizedCategory == 'proware_and_pe' || category.trim() == 'Proware & PE') {
         itemDoc = await _firestore
             .collection('Inventory_stock')
             .doc('Proware & PE')
@@ -338,99 +450,6 @@ class _PreOrderPageState extends State<PreOrderPage> {
       }
     } catch (e) {
       throw Exception("Failed to validate stock availability for $label.");
-    }
-  }
-
-  Future<double> _fetchPricePerPiece(String category, String label, String size, {String? courseLabel}) async {
-    try {
-      final normalizedCategory = category.toLowerCase().trim();
-      final normalizedLabel = label.toLowerCase().trim();
-
-      if (normalizedCategory == 'merch_and_accessories') {
-        final categoryDoc = await _firestore.collection('Inventory_stock').doc('Merch & Accessories').get();
-        if (categoryDoc.exists) {
-          final data = categoryDoc.data() as Map<String, dynamic>;
-          if (data.containsKey(label)) {
-            final itemData = data[label] as Map<String, dynamic>;
-            if (itemData.containsKey('sizes')) {
-              final sizes = itemData['sizes'] as Map<String, dynamic>;
-              if (sizes.containsKey(size)) {
-                return sizes[size]['price']?.toDouble() ?? 0.0;
-              }
-            }
-            return itemData['price']?.toDouble() ?? 0.0;
-          }
-        }
-        throw Exception('Item not found in Merch & Accessories: $label');
-      } else if (normalizedCategory == 'college_items') {
-        if (courseLabel == null || courseLabel.isEmpty) {
-          throw Exception('Missing courseLabel for college_items.');
-        }
-
-        final categoryDoc = await _firestore
-            .collection('Inventory_stock')
-            .doc('college_items')
-            .collection(courseLabel)
-            .where('label', isEqualTo: label)
-            .limit(1)
-            .get();
-
-        if (categoryDoc.docs.isNotEmpty) {
-          final itemData = categoryDoc.docs.first.data() as Map<String, dynamic>;
-          if (itemData.containsKey('sizes')) {
-            final sizes = itemData['sizes'] as Map<String, dynamic>;
-            if (sizes.containsKey(size)) {
-              return sizes[size]['price']?.toDouble() ?? 0.0;
-            }
-          }
-          return itemData['price']?.toDouble() ?? 0.0;
-        }
-        throw Exception('Item document not found for label: $label in courseLabel: $courseLabel under category: $category.');
-      } else if (normalizedCategory == 'senior_high_items') {
-        final categoryDoc = await _firestore
-            .collection('Inventory_stock')
-            .doc('senior_high_items')
-            .collection('Items')
-            .doc(label)
-            .get();
-        if (categoryDoc.exists) {
-          final data = categoryDoc.data() as Map<String, dynamic>;
-          if (data.containsKey('sizes')) {
-            final sizes = data['sizes'] as Map<String, dynamic>;
-            if (sizes.containsKey(size)) {
-              return sizes[size]['price']?.toDouble() ?? 0.0;
-            }
-          }
-          return data['price']?.toDouble() ?? 0.0;
-        }
-        throw Exception('Item not found in Senior High Items: $label');
-      } else if (normalizedCategory == 'proware & pe') {
-        if (courseLabel == null || courseLabel.isEmpty) {
-          throw Exception('Missing courseLabel for proware & pe.');
-        }
-
-        final categoryDoc = await _firestore
-            .collection('Inventory_stock')
-            .doc('Proware & PE')
-            .collection(courseLabel)
-            .doc(label)
-            .get();
-        if (categoryDoc.exists) {
-          final data = categoryDoc.data() as Map<String, dynamic>;
-          if (data.containsKey('sizes')) {
-            final sizes = data['sizes'] as Map<String, dynamic>;
-            if (sizes.containsKey(size)) {
-              return sizes[size]['price']?.toDouble() ?? 0.0;
-            }
-          }
-          return data['price']?.toDouble() ?? 0.0;
-        }
-        throw Exception('Item not found in Proware & PE: $label');
-      }
-
-      throw Exception('Unknown category: $category');
-    } catch (e) {
-      throw Exception('Failed to fetch pricePerPiece for $label in category $category.');
     }
   }
 

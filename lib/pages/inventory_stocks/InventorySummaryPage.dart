@@ -515,6 +515,8 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
   Future<void> _printSummary() async {
     final pdf = pw.Document();
 
+    print("Starting to process category summaries...");
+
     List<Map<String, dynamic>> categorySummaries = [
       {"title": "Senior High Summary", "data": _seniorHighStock, "soldCategory": "senior_high_items"},
       {"title": "College Summary", "data": _collegeStock, "soldCategory": "college_items"},
@@ -528,7 +530,11 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
       String soldCategory = category["soldCategory"];
       final categorySoldData = _soldData[soldCategory] ?? {};
 
+      print("Processing category: $categoryTitle");
+      print("Stock data for $categoryTitle: $stockData");
+
       if (stockData == null || stockData.isEmpty) {
+        print("$categoryTitle has no stock data. Skipping...");
         continue;
       }
 
@@ -541,7 +547,13 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
       );
 
       if (categoryTitle == "College Summary") {
+        print("Processing College Summary...");
+        final processedItems = <String>{}; // To track processed items and avoid duplication
+
         stockData.forEach((courseLabel, courseItems) {
+          print("Course Label: $courseLabel");
+          print("Course Items: $courseItems");
+
           categoryWidgets.add(
             pw.Padding(
               padding: const pw.EdgeInsets.only(top: 12),
@@ -553,10 +565,20 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
           );
 
           courseItems.forEach((itemKey, item) {
+            if (processedItems.contains(itemKey)) {
+              print("Skipping duplicate item: $itemKey");
+              return;
+            }
+            processedItems.add(itemKey);
+
             final label = item['label'] ?? itemKey;
             final stock = item['stock'] as Map<String, dynamic>? ?? {};
             final normalizedLabel = label.toString().toLowerCase().trim();
             Map<String, int> soldItems = categorySoldData[normalizedLabel] ?? {};
+
+            print("Processing item: $label");
+            print("Stock data: $stock");
+            print("Sold data: $soldItems");
 
             categoryWidgets.add(
               pw.Padding(
@@ -575,6 +597,9 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
                   final size = stock[sizeKey];
                   final normalizedSize = sizeKey.toLowerCase();
                   final soldQuantity = soldItems[normalizedSize] ?? 0;
+
+                  print("Size: $sizeKey, Stock: ${size['quantity']}, Sold: $soldQuantity, Price: ${size['price']}");
+
                   return [
                     sizeKey,
                     size['quantity'].toString(),
@@ -590,10 +615,17 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
             );
           });
         });
-      }
-
-      if (categoryTitle == "Proware & PE Summary") {
+      } else if (categoryTitle == "Proware & PE Summary") {
+        print("Processing Proware & PE Summary...");
         stockData.forEach((subcategory, subcategoryItems) {
+          print("Subcategory: $subcategory");
+          print("Subcategory Items: $subcategoryItems");
+
+          if (subcategoryItems.isEmpty) {
+            print("Skipping empty subcategory: $subcategory");
+            return;
+          }
+
           categoryWidgets.add(
             pw.Padding(
               padding: const pw.EdgeInsets.only(top: 12),
@@ -610,6 +642,15 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
             final normalizedLabel = normalizeKey(label);
             Map<String, int> soldItems = categorySoldData[normalizedLabel] ?? {};
 
+            if (stock.isEmpty) {
+              print("Skipping item with no stock: $label");
+              return;
+            }
+
+            print("Processing item: $label");
+            print("Stock data: $stock");
+            print("Sold data: $soldItems");
+
             categoryWidgets.add(
               pw.Padding(
                 padding: const pw.EdgeInsets.only(top: 8),
@@ -627,6 +668,9 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
                   final size = stock[sizeKey];
                   final normalizedSize = sizeKey.toLowerCase();
                   final soldQuantity = soldItems[normalizedSize] ?? 0;
+
+                  print("Size: $sizeKey, Stock: ${size['quantity']}, Sold: $soldQuantity, Price: ${size['price']}");
+
                   return [
                     sizeKey,
                     size['quantity'].toString(),
@@ -642,10 +686,12 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
             );
           });
         });
-      }
-
-      else {
+      } else {
+        // General case for Senior High and Merch
         stockData.forEach((itemKey, item) {
+          print("Processing item in $categoryTitle: $itemKey");
+          print("Item details: $item");
+
           final label = item['label'] ?? itemKey;
           final stock = item['stock'] as Map<String, dynamic>? ?? {};
           final normalizedLabel = label.toString().toLowerCase().trim();
@@ -668,6 +714,9 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
                 final size = stock[sizeKey];
                 final normalizedSize = sizeKey.toLowerCase();
                 final soldQuantity = soldItems[normalizedSize] ?? 0;
+
+                print("Size: $sizeKey, Stock: ${size['quantity']}, Sold: $soldQuantity, Price: ${size['price']}");
+
                 return [
                   sizeKey,
                   size['quantity'].toString(),
@@ -683,6 +732,13 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
           );
         });
       }
+
+      // Debug the categoryWidgets before adding to the PDF
+      print("Category Widgets for $categoryTitle:");
+      categoryWidgets.forEach((widget) {
+        print(widget.toString());
+      });
+
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
@@ -695,6 +751,8 @@ class _InventorySummaryPageState extends State<InventorySummaryPage> {
         ),
       );
     }
+
+    print("Finished processing all categories.");
 
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => pdf.save(),
