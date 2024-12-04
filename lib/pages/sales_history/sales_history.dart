@@ -23,6 +23,8 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
   Future<List<Map<String, dynamic>>>? _salesDataFuture;
   List<Map<String, dynamic>> _allSalesItems = [];
   double _totalRevenue = 0.0;
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   @override
   void initState() {
@@ -84,21 +86,37 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
   void _filterSalesData() {
     String query = _searchController.text.toLowerCase();
     setState(() {
-      if (query.isEmpty) {
-        _filteredSalesData = List.from(_allSalesItems);
-      } else {
-        _filteredSalesData = _allSalesItems.where((sale) {
+      _filteredSalesData = _allSalesItems.where((sale) {
+        // Check label filter
+        bool matchesLabel = true;
+        if (query.isNotEmpty) {
           if (sale['isBulk'] == true) {
-            return (sale['items'] as List).any((item) =>
+            matchesLabel = (sale['items'] as List).any((item) =>
                 (item['label'] ?? '').toString().toLowerCase().contains(query));
           } else {
-            return (sale['items'][0]['label'] ?? '')
+            matchesLabel = (sale['items'][0]['label'] ?? '')
                 .toString()
                 .toLowerCase()
                 .contains(query);
           }
-        }).toList();
-      }
+        }
+
+        // Check date filter
+        bool matchesDate = true;
+        if (_startDate != null || _endDate != null) {
+          DateTime orderDate = (sale['orderDate'] as Timestamp).toDate();
+          if (_startDate != null) {
+            matchesDate &= orderDate.isAfter(_startDate!) ||
+                orderDate.isAtSameMomentAs(_startDate!);
+          }
+          if (_endDate != null) {
+            matchesDate &= orderDate.isBefore(_endDate!) ||
+                orderDate.isAtSameMomentAs(_endDate!);
+          }
+        }
+
+        return matchesLabel && matchesDate;
+      }).toList();
     });
   }
 
@@ -268,6 +286,9 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
               if (allSalesItems != null && allSalesItems.isNotEmpty) {
                 await _generatePDF(allSalesItems);
               } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("No sales data to print")),
+                );
               }
             },
           ),
@@ -277,16 +298,87 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                labelText: 'Search by Item Label',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-              ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () async {
+                          DateTime? pickedDate = await showDatePicker(
+                            context: context,
+                            initialDate: _startDate ?? DateTime.now(),
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime.now(),
+                          );
+                          if (pickedDate != null) {
+                            setState(() {
+                              _startDate = pickedDate;
+                              _filterSalesData();
+                            });
+                          }
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey),
+                            borderRadius: BorderRadius.circular(8.0),
+                          ),
+                          padding: EdgeInsets.symmetric(horizontal: 12.0, vertical: 16.0),
+                          child: Text(
+                            _startDate != null
+                                ? DateFormat('yyyy-MM-dd').format(_startDate!)
+                                : 'Start Date',
+                            style: TextStyle(color: Colors.grey[700]),
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 16.0),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () async {
+                          DateTime? pickedDate = await showDatePicker(
+                            context: context,
+                            initialDate: _endDate ?? DateTime.now(),
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime.now(),
+                          );
+                          if (pickedDate != null) {
+                            setState(() {
+                              _endDate = pickedDate;
+                              _filterSalesData();
+                            });
+                          }
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey),
+                            borderRadius: BorderRadius.circular(8.0),
+                          ),
+                          padding: EdgeInsets.symmetric(horizontal: 12.0, vertical: 16.0),
+                          child: Text(
+                            _endDate != null
+                                ? DateFormat('yyyy-MM-dd').format(_endDate!)
+                                : 'End Date',
+                            style: TextStyle(color: Colors.grey[700]),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 16.0),
+                TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    labelText: 'Search by Item Label',
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
             ),
           ),
-
           Expanded(
             child: FutureBuilder<List<Map<String, dynamic>>>(
               future: _salesDataFuture,
@@ -398,7 +490,6 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
               },
             ),
           ),
-
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Align(

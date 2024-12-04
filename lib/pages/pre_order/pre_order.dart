@@ -54,6 +54,9 @@ class _PreOrderPageState extends State<PreOrderPage> {
       String itemNames = itemDetails.join(", ");
       String message = "Hello $studentName (Student ID: $studentNumber), your pre-order for $itemNames has been approved. Total Price: ₱${overallTotalPrice.toStringAsFixed(2)}.";
 
+      // Print the composed message
+      print("Composed SMS message: $message");
+
       final response = await http.post(
         Uri.parse('http://localhost:3000/send-sms'),
         headers: {
@@ -68,11 +71,15 @@ class _PreOrderPageState extends State<PreOrderPage> {
       );
 
       if (response.statusCode == 200) {
+        print("SMS sent successfully to $contactNumber");
       } else {
+        print("Failed to send SMS. Status code: ${response.statusCode}");
       }
     } catch (e) {
+      print("Error in _sendSMSToUser: $e");
     }
   }
+
 
   Future<void> _fetchAllPendingPreOrders() async {
     List<Map<String, dynamic>> pendingPreOrders = [];
