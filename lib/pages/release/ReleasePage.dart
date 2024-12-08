@@ -240,7 +240,7 @@ class _ReleasePageState extends State<ReleasePage> {
 
       if (category == 'Merch & Accessories') {
         await _deductFromMerchAndAccessories(label, size, quantity);
-      } else if (category == 'Proware & PE') {
+      } else if (category == 'Proware & PE' || category == 'proware_and_pe') {
         await _deductFromProwareAndPE(subCategory, label, size, quantity);
       } else if (category == 'college_items') {
         await _deductFromCollegeItems(subCategory, label, size, quantity);
